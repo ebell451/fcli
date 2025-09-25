@@ -10,17 +10,17 @@
  * herein. The information contained herein is subject to change 
  * without notice.
  *******************************************************************************/
-package com.fortify.cli.ssc.issue.cli.cmd;
+package com.fortify.cli.ssc.issue_template.cli.cmd;
 
-import com.fortify.cli.common.cli.util.CommandGroup;
+import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
-import com.fortify.cli.ssc.issue_template.cli.cmd.AbstractSSCIssueTemplateDownloadCommand;
 
 import lombok.Getter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 
-@Command(name = OutputHelperMixins.DownloadTemplate.CMD_NAME) @CommandGroup("issue-template")
-public class SSCIssueTemplateDownloadCommand extends AbstractSSCIssueTemplateDownloadCommand {
-    @Getter @Mixin private OutputHelperMixins.DownloadTemplate outputHelper;
+@MCPExclude
+@Command(name = OutputHelperMixins.Create.CMD_NAME)
+public class SSCIssueTemplateCreateCommand extends AbstractSSCIssueTemplateCreateCommand {
+    @Getter @Mixin private OutputHelperMixins.Create outputHelper;
 }

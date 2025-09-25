@@ -142,9 +142,15 @@ public class PicocliSpecHelper {
                 || isMcpIgnoredCommandName(spec)
                 || isHiddenSelfOrParent(spec)
                 || !isRunnable(spec)
-                || hasRequiredSensitiveArgs(spec);
+                || hasRequiredSensitiveArgs(spec)
+                || isDeprecated(spec);
     }
     
+    private static final boolean isDeprecated(CommandSpec spec) {
+        var header = spec.usageMessage().header();
+        return header==null || Stream.of(header).anyMatch(h->h.indexOf("DEPRECATED")>=0);
+    }
+
     private static boolean isMcpIgnoredCommandName(CommandSpec spec) {
         // Using a single regular expression, given a string like "fcli module entity action", ignore if:
         // action starts with reset, revoke, delete, clear

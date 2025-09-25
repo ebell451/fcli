@@ -10,17 +10,22 @@
  * herein. The information contained herein is subject to change 
  * without notice.
  *******************************************************************************/
-package com.fortify.cli.ssc.issue.cli.cmd;
+package com.fortify.cli.ssc.custom_tag.cli.cmd;
 
-import com.fortify.cli.common.cli.util.CommandGroup;
-import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
-import com.fortify.cli.ssc.issue_template.cli.cmd.AbstractSSCIssueTemplateDownloadCommand;
+import com.fortify.cli.common.cli.cmd.AbstractContainerCommand;
 
-import lombok.Getter;
 import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
 
-@Command(name = OutputHelperMixins.DownloadTemplate.CMD_NAME) @CommandGroup("issue-template")
-public class SSCIssueTemplateDownloadCommand extends AbstractSSCIssueTemplateDownloadCommand {
-    @Getter @Mixin private OutputHelperMixins.DownloadTemplate outputHelper;
+@Command(
+        name = "custom-tag",
+        aliases = "tag",
+        subcommands = {
+                SSCCustomTagListCommand.class,
+                SSCCustomTagGetCommand.class,
+                SSCCustomTagDeleteCommand.class,
+                SSCCustomTagCreateCommand.class,
+                SSCCustomTagUpdateCommand.class,
+        }
+)
+public class SSCCustomTagCommands extends AbstractContainerCommand {
 }

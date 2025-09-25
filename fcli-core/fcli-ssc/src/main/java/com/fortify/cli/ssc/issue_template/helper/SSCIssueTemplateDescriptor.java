@@ -10,17 +10,23 @@
  * herein. The information contained herein is subject to change 
  * without notice.
  *******************************************************************************/
-package com.fortify.cli.ssc.issue.cli.cmd;
+package com.fortify.cli.ssc.issue_template.helper;
 
-import com.fortify.cli.common.cli.util.CommandGroup;
-import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
-import com.fortify.cli.ssc.issue_template.cli.cmd.AbstractSSCIssueTemplateDownloadCommand;
+import com.formkiq.graalvm.annotations.Reflectable;
+import com.fortify.cli.common.json.JsonNodeHolder;
 
-import lombok.Getter;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Mixin;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
 
-@Command(name = OutputHelperMixins.DownloadTemplate.CMD_NAME) @CommandGroup("issue-template")
-public class SSCIssueTemplateDownloadCommand extends AbstractSSCIssueTemplateDownloadCommand {
-    @Getter @Mixin private OutputHelperMixins.DownloadTemplate outputHelper;
+@Reflectable @NoArgsConstructor
+@Data @EqualsAndHashCode(callSuper=true)
+public class SSCIssueTemplateDescriptor extends JsonNodeHolder {
+    private String id;
+    private String name;
+    private String description;
+    private boolean inUse;
+    private boolean defaultTemplate;
+    private String publishVersion;
+    private String originalFileName;
 }

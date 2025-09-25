@@ -10,23 +10,15 @@
  * herein. The information contained herein is subject to change 
  * without notice.
  *******************************************************************************/
-package com.fortify.cli.ssc.issue.helper;
+package com.fortify.cli.ssc.issue_template.cli.cmd;
 
-import com.formkiq.graalvm.annotations.Reflectable;
-import com.fortify.cli.common.json.JsonNodeHolder;
+import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import lombok.Getter;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Mixin;
 
-@Reflectable @NoArgsConstructor
-@Data @EqualsAndHashCode(callSuper=true)
-public class SSCIssueTemplateDescriptor extends JsonNodeHolder {
-    private String id;
-    private String name;
-    private String description;
-    private boolean inUse;
-    private boolean defaultTemplate;
-    private String publishVersion;
-    private String originalFileName;
+@Command(name = OutputHelperMixins.List.CMD_NAME)
+public class SSCIssueTemplateListCommand extends AbstractSSCIssueTemplateListCommand {
+    @Getter @Mixin private OutputHelperMixins.List outputHelper;
 }
