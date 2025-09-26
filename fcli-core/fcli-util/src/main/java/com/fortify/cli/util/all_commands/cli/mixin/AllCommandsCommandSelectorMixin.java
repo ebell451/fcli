@@ -25,8 +25,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fortify.cli.common.cli.mixin.CommandHelperMixin;
 import com.fortify.cli.common.json.JsonHelper;
-import com.fortify.cli.common.output.query.QueryExpression;
-import com.fortify.cli.common.output.query.QueryExpressionTypeConverter;
+import com.fortify.cli.common.spel.query.QueryExpression;
+import com.fortify.cli.common.spel.query.QueryExpressionTypeConverter;
 import com.fortify.cli.common.util.PicocliSpecHelper;
 
 import lombok.Getter;
