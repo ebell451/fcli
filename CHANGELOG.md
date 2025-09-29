@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * Fix build issue that caused fcli release process to fail ([4d074d3](https://github.com/fortify/fcli/commit/4d074d3f0b74e991c113fe3ca8ab2019a03950c4))
-* Fix build issue that caused fcli release process to fail ([c9291e3](https://github.com/fortify/fcli/commit/c9291e3006b21085da17f52b9295f3d117e6e2d1))
 
 ## [3.8.0](https://github.com/fortify/fcli/compare/v3.7.0...v3.8.0) (2025-07-25)
 
