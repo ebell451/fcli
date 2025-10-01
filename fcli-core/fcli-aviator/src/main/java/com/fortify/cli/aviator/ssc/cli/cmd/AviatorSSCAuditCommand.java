@@ -95,6 +95,7 @@ public class AviatorSSCAuditCommand extends AbstractSSCJsonNodeOutputCommand imp
                     SSCUrls.DOWNLOAD_CURRENT_FPR(av.getVersionId(), true),
                     fprFile,
                     SSCFileTransferHelper.ISSCAddDownloadTokenFunction.ROUTEPARAM_DOWNLOADTOKEN);
+            fprFile.deleteOnExit();
             return fprFile;
         } catch (UnexpectedHttpResponseException e) {
             if (e.getStatus() == 400) {
