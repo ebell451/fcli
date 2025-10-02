@@ -1,5 +1,16 @@
 # Changelog
 
+## [3.9.1](https://github.com/fortify/fcli/compare/v3.9.0...v3.9.1) (2025-10-02)
+
+
+### Bug Fixes
+
+* `fcli aviator ssc audit`: Improve cleanup of temporary files ([6175f54](https://github.com/fortify/fcli/commit/6175f5426f8be139798382f97d1f19d787d27ec4))
+* `fcli aviator ssc audit`: Resolve file token leak during Aviator artifact uploads, to avoid SSC errors due to reaching maximum number of allowed file tokens ([6d2e28c](https://github.com/fortify/fcli/commit/6d2e28ccc4b27c7ba33a255ae31f1e5081e38a48))
+* `fcli ssc`: Reduce bulk request batch size to prevent potential networking timeouts due to SSC taking too long to process large bulk requests ([eae7948](https://github.com/fortify/fcli/commit/eae7948035f7d60db90c00fb30ad5e83501bc704))
+* `fcli util mcp-server start`: Improve usage help ([d4225ce](https://github.com/fortify/fcli/commit/d4225ce0dd7a4cb728988614c34716be706fe231))
+* Improve progress message handling ([9af8e67](https://github.com/fortify/fcli/commit/9af8e679c16bc6736b9c3403d3d20e4dd27e1ee6))
+
 ## [3.9.0](https://github.com/fortify/fcli/compare/v3.8.1...v3.9.0) (2025-09-29)
 
 
