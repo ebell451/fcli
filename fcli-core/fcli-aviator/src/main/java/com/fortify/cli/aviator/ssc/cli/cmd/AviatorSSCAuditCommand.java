@@ -74,7 +74,7 @@ public class AviatorSSCAuditCommand extends AbstractSSCJsonNodeOutputCommand imp
 
             String artifactId = "UPLOAD_SKIPPED";
             if (auditResult.getUpdatedFile() != null && !"SKIPPED".equals(auditResult.getStatus()) && !"FAILED".equals(auditResult.getStatus())) {
-                artifactId = uploadAuditedFprToSSC(unirest, auditResult.getUpdatedFile(), av, logger);
+                artifactId = uploadAuditedFprToSSC(unirest, auditResult.getUpdatedFile(), av);
             }
 
             return AviatorSSCAuditHelper.buildResultNode(av, artifactId, action);
@@ -95,6 +95,7 @@ public class AviatorSSCAuditCommand extends AbstractSSCJsonNodeOutputCommand imp
                     SSCUrls.DOWNLOAD_CURRENT_FPR(av.getVersionId(), true),
                     fprFile,
                     SSCFileTransferHelper.ISSCAddDownloadTokenFunction.ROUTEPARAM_DOWNLOADTOKEN);
+            fprFile.deleteOnExit();
             return fprFile;
         } catch (UnexpectedHttpResponseException e) {
             if (e.getStatus() == 400) {
@@ -113,9 +114,8 @@ public class AviatorSSCAuditCommand extends AbstractSSCJsonNodeOutputCommand imp
     }
 
     @SneakyThrows
-    private String uploadAuditedFprToSSC(UnirestInstance unirest, File auditedFpr, SSCAppVersionDescriptor av, AviatorLoggerImpl logger) {
-        JsonNode uploadResponse = SSCFileTransferHelper.upload(unirest, SSCUrls.PROJECT_VERSION_ARTIFACTS(av.getVersionId()), auditedFpr,
-                SSCFileTransferHelper.ISSCAddUploadTokenFunction.QUERYSTRING_MAT, JsonNode.class);
+    private String uploadAuditedFprToSSC(UnirestInstance unirest, File auditedFpr, SSCAppVersionDescriptor av) {
+        JsonNode uploadResponse = SSCFileTransferHelper.restUpload(unirest, SSCUrls.PROJECT_VERSION_ARTIFACTS(av.getVersionId()), auditedFpr, JsonNode.class);
         return uploadResponse.path("data").path("id").asText("UPLOAD_FAILED");
     }
 
