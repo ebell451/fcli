@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fortify.cli.common.exception.FcliBugException;
 import com.fortify.cli.common.exception.FcliExecutionExceptionHandler;
 import com.fortify.cli.common.exception.FcliSimpleException;
 import com.fortify.cli.common.output.writer.output.standard.StandardOutputWriter;
@@ -65,9 +64,6 @@ public final class FcliCommandExecutorFactory {
     }
     
     public final FcliCommandExecutor create() {
-        if ( getRootCommandLine()==null ) {
-            throw new FcliBugException("Root command line hasn't been configured upon fcli initialization");
-        }
         if ( StringUtils.isBlank(cmd) ) {
             throw new FcliSimpleException("Fcli command to be run may not be blank");
         }

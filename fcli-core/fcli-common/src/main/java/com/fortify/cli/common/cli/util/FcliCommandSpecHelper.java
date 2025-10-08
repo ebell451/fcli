@@ -30,7 +30,6 @@ import com.fortify.cli.common.output.cli.cmd.IOutputHelperSupplier;
 import com.fortify.cli.common.util.JavaHelper;
 import com.fortify.cli.common.util.ReflectionHelper;
 
-import lombok.Getter;
 import lombok.Setter;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.ArgSpec;
@@ -38,11 +37,29 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Model.Messages;
 
 public class FcliCommandSpecHelper {
-    @Getter @Setter // Injected by DefaultFortifyCLIRunner
+    @Setter // Injected by DefaultFortifyCLIRunner
     private static CommandLine rootCommandLine;
     
+    public static final CommandLine getRootCommandLine() {
+        if ( rootCommandLine==null ) {
+            throw new FcliBugException("Root command line hasn't been configured upon fcli initialization");
+        }
+        return rootCommandLine;
+    }
+    
     public static final CommandSpec getRootCommandSpec() {
-        return rootCommandLine==null ? null : rootCommandLine.getCommandSpec().root();
+        return getRootCommandLine().getCommandSpec().root();
+    }
+    
+    public static final CommandSpec getCommandSpec(String cmd) {
+        var currentSpec = getRootCommandSpec();
+        if ( StringUtils.isBlank(cmd) ) { return currentSpec; }
+        for ( var elt : cmd.replaceAll("^fcli\\s+", "").split("\\s+") ) {
+            var cl = currentSpec.subcommands().get(elt);
+            if ( cl==null ) { return null; }
+            currentSpec = cl.getCommandSpec();
+        }
+        return currentSpec;
     }
     
     public static final Stream<CommandSpec> rootCommandTreeStream() {

@@ -32,6 +32,7 @@ import com.fortify.cli.common.action.model.ActionCliOption;
 import com.fortify.cli.common.action.model.ActionMcpIncludeExclude;
 import com.fortify.cli.common.cli.cmd.AbstractRunnableCommand;
 import com.fortify.cli.common.cli.util.FcliCommandSpecHelper;
+import com.fortify.cli.common.exception.FcliBugException;
 import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.util.FcliBuildProperties;
@@ -104,14 +105,16 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
 
     private List<SyncToolSpecification> createToolSpecs() {
         var result = new ArrayList<SyncToolSpecification>();
-        // Existing Picocli command-based tools
+        // Picocli command-based tools
         result.addAll(module.getSubcommandsStream()
                 .filter(spec->!FcliCommandSpecHelper.isMcpIgnored(spec))
                 .map(cs->createCommandToolSpec(cs))
                 .peek(s->LOG.debug("Registering cmd tool: {}", s.tool().name()))
                 .toList());
-        // New action-based tools
-        result.addAll(createActionToolSpecs());
+        // Fcli action tools
+        if ( module.hasActionCmd() ) {
+            result.addAll(createActionToolSpecs());
+        }
         return result;
     }
     
@@ -263,9 +266,21 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
             return name().replace('_', '-');
         }
         
+        public boolean hasActionCmd() {
+            return getModuleSpec().subcommands().containsKey("action");
+        }
+
         public final Stream<CommandSpec> getSubcommandsStream() {
-            var moduleSpec = FcliCommandSpecHelper.getRootCommandSpec().subcommands().get(this.toString()).getCommandSpec();
-            return FcliCommandSpecHelper.commandTreeStream(moduleSpec);
+            return FcliCommandSpecHelper.commandTreeStream(getModuleSpec());
+        }
+
+        private CommandSpec getModuleSpec() {
+            var moduleName = this.toString();
+            var moduleSpec = FcliCommandSpecHelper.getCommandSpec(moduleName);
+            if ( moduleSpec==null ) {
+                throw new FcliBugException("No command spec found for module: "+moduleName);
+            }
+            return moduleSpec;
         }
     }
 }
