@@ -34,7 +34,6 @@ import com.fortify.cli.common.output.writer.output.standard.StandardOutputWriter
 import com.fortify.cli.common.util.OutputHelper;
 import com.fortify.cli.common.util.OutputHelper.OutputType;
 import com.fortify.cli.common.util.OutputHelper.Result;
-import com.fortify.cli.common.util.PicocliSpecHelper;
 import com.fortify.cli.common.variable.FcliVariableHelper;
 
 import lombok.Builder;
@@ -62,7 +61,7 @@ public final class FcliCommandExecutorFactory {
     public final Map<String, String> defaultOptionsIfNotPresent;
     
     private static final CommandLine getRootCommandLine() {
-        return FcliRootCommandLineHelper.getRootCommandLine();
+        return FcliCommandSpecHelper.getRootCommandLine();
     }
     
     public final FcliCommandExecutor create() {
@@ -178,7 +177,7 @@ public final class FcliCommandExecutorFactory {
         }
 
         public final boolean canCollectRecords() {
-            return PicocliSpecHelper.canCollectRecords(replicatedLeafCommandSpec);
+            return FcliCommandSpecHelper.canCollectRecords(replicatedLeafCommandSpec);
         }
         
         private <T> void consume(T value, Consumer<T> consumer, Consumer<T> defaultConsumer) {
