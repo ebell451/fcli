@@ -184,12 +184,18 @@ class AviatorStreamProcessor implements AutoCloseable {
                         processRequestQueue(currentStreamState.totalRequests, processedRequests, responses, resultFuture, this.streamLatch);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                        // Check if interruption is due to normal shutdown
+                        if (client.isShutdown.get() || requestHandler.isCompleted()) {
+                            LOG.debug("Processing task interrupted during normal shutdown");
+                            return; // Exit gracefully without propagating exception
+                        }
                         resultFuture.completeExceptionally(new AviatorTechnicalException("Interrupted during request processing", e));
                     } catch (Exception e) {
-                        if (requestHandler != null && !requestHandler.isCompleted()) {
+                        // Only propagate exceptions if the stream hasn't completed successfully
+                        if (requestHandler != null && !requestHandler.isCompleted() && !resultFuture.isDone()) {
                             resultFuture.completeExceptionally(new AviatorTechnicalException("Error during request processing execution", e));
                         } else {
-                            LOG.warn("Exception caught after stream completion during processing execution", e);
+                            LOG.debug("Exception caught after stream completion or shutdown: {}", e.getMessage());
                         }
                     }
                 });
@@ -394,6 +400,7 @@ class AviatorStreamProcessor implements AutoCloseable {
                         if (processingTask != null) {
                             processingTask.cancel(true);
                         }
+
                         if (!processingExecutor.isShutdown()) {
                             processingExecutor.submit(() -> startStreamWithRetry(responses, processedRequests, resultFuture));
                         } else {
