@@ -1,5 +1,27 @@
 # Changelog
 
+## [3.10.0](https://github.com/fortify/fcli/compare/v3.9.1...v3.10.0) (2025-10-09)
+
+
+### Features
+
+* `fcli aviator app`: Show quota in output of the `create`, `get`, `list`, and `update` commands ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* `fcli aviator ssc audit`: Add `--filterset`, `--no-filterset`, and `--folder` options to allow for selecting issues to be audited ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* Add `fcli aviator fod apply-remediations` command to apply Aviator-proposed remediations from an audited FPR file in FoD to a local source code directory ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* Add `fcli aviator ssc apply-remediations` command to apply Aviator-proposed remediations from an audited FPR file in SSC to a local source code directory ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* Add `fcli aviator ssc prepare` command to configure Aviator custom tags on SSC issue templates and application versions ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* Add `fcli fod action run gitlab-debricked-report` ([#818](https://github.com/fortify/fcli/issues/818)) ([2175af6](https://github.com/fortify/fcli/commit/2175af6277f8d2cb55df83dc5e7e76937e850e4a))
+
+
+### Bug Fixes
+
+* `fcli aviator ssc audit`: Add preflight check for auditable issues ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* `fcli aviator ssc audit`: Improve FPR handling with Zip File System Provider integration and proper resource cleanup ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* `fcli aviator ssc audit`: Improve FPR parsing speed and memory efficiency ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* `fcli aviator ssc audit`: Improve FPR validation for FPRs with DAST-only issues ([4fd5756](https://github.com/fortify/fcli/commit/4fd5756cda3675a5393ebadcaa4d9bdc31a1ad91))
+* `fcli aviator ssc audit`: Prevent race condition crash by checking executor state before retrying gRPC stream ([#819](https://github.com/fortify/fcli/issues/819)) ([646a963](https://github.com/fortify/fcli/commit/646a963fad2cc4e69abf86740bc3c777643c35af))
+* `fcli util mcp-server start`: Some common actions were exposed as MCP tools on modules that don't support actions through the CLI ([fa49f97](https://github.com/fortify/fcli/commit/fa49f97ddb9c740fee1f3816a37da0eb3732ee1a))
+
 ## [3.9.1](https://github.com/fortify/fcli/compare/v3.9.0...v3.9.1) (2025-10-02)
 
 
