@@ -31,5 +31,6 @@ dependencies {
         api("org.apache.commons:commons-lang3:3.19.0")
         api("org.apache.commons:commons-compress:1.28.0")
         api("org.jsoup:jsoup:1.21.2")
+        api("org.eclipse.jgit:org.eclipse.jgit:7.4.0.202509020913-r")
     }
 }
