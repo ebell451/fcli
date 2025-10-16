@@ -10,7 +10,7 @@
  * herein. The information contained herein is subject to change 
  * without notice.
  *******************************************************************************/
-package com.fortify.cli.fod.app.attr.helper;
+package com.fortify.cli.fod.attribute.helper;
 
 import java.util.*;
 
@@ -169,4 +169,37 @@ public class FoDAttributeHelper {
         }
         return attrArray;
     }
+
+    public static FoDAttributeDescriptor createAttribute(UnirestInstance unirest, FoDAttributeCreateRequest request) {
+        var response =  unirest.post(FoDUrls.ATTRIBUTES)
+                .header("Content-Type", "application/json")
+                .body(request)
+                .asObject(JsonNode.class)
+                .getBody();
+        if (response.has("success") && response.get("success").asBoolean()) {
+            if (!response.has("attributeId")) {
+                throw new FcliSimpleException("Response missing attributeId: " + response.toString());
+            }
+            var attributeId = response.get("attributeId").asText();
+            return getAttributeDescriptor(unirest, attributeId, true);
+        } else {
+            throw new FcliSimpleException("Failed to create attribute: " + response.toString());
+        }
+
+    }
+
+    public static FoDAttributeDescriptor updateAttribute(UnirestInstance unirest, String attributeId, FoDAttributeUpdateRequest request) {
+        var response = unirest.put(FoDUrls.ATTRIBUTE)
+                .routeParam("attributeId", attributeId)
+                .body(request)
+                .asObject(JsonNode.class)
+                .getBody();
+        if (response.has("success") && response.get("success").asBoolean()) {
+            return getAttributeDescriptor(unirest, attributeId, true);
+        } else {
+            throw new FcliSimpleException("Failed to update attribute: " + response.toString());
+        }
+
+    }
+
 }
