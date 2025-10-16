@@ -1,26 +1,17 @@
+/*
+ * Copyright 2021-2025 Open Text.
+ *
+ * The only warranties for products and services of Open Text
+ * and its affiliates and licensors ("Open Text") are as may
+ * be set forth in the express warranty statements accompanying
+ * such products and services. Nothing herein should be construed
+ * as constituting an additional warranty. Open Text shall not be
+ * liable for technical or editorial errors or omissions contained
+ * herein. The information contained herein is subject to change
+ * without notice.
+ */
 package com.fortify.cli.aviator.fpr.processor;
 
-import com.fortify.cli.aviator.audit.model.File;
-import com.fortify.cli.aviator.audit.model.StackTraceElement;
-import com.fortify.cli.aviator.fpr.Vulnerability;
-import com.fortify.cli.aviator.fpr.VulnerabilityMapper;
-import com.fortify.cli.aviator.fpr.jaxb.FVDL;
-import com.fortify.cli.aviator.fpr.jaxb.MetaInfo;
-import com.fortify.cli.aviator.fpr.jaxb.UnifiedNode;
-import com.fortify.cli.aviator.fpr.jaxb.UnifiedTrace;
-import com.fortify.cli.aviator.fpr.model.Entry;
-import com.fortify.cli.aviator.fpr.model.ReplacementData;
-import com.fortify.cli.aviator.fpr.utils.FileUtils;
-import com.fortify.cli.aviator.fpr.utils.XmlUtils;
-import com.fortify.cli.aviator.util.FprHandle;
-import com.fortify.cli.aviator.util.StringUtil;
-import lombok.Getter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import jakarta.xml.bind.JAXBContext;
-import jakarta.xml.bind.JAXBException;
-import jakarta.xml.bind.Unmarshaller;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -37,6 +28,29 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fortify.cli.aviator.audit.model.File;
+import com.fortify.cli.aviator.audit.model.StackTraceElement;
+import com.fortify.cli.aviator.fpr.Vulnerability;
+import com.fortify.cli.aviator.fpr.VulnerabilityMapper;
+import com.fortify.cli.aviator.fpr.jaxb.FVDL;
+import com.fortify.cli.aviator.fpr.jaxb.MetaInfo;
+import com.fortify.cli.aviator.fpr.jaxb.UnifiedNode;
+import com.fortify.cli.aviator.fpr.jaxb.UnifiedTrace;
+import com.fortify.cli.aviator.fpr.model.Entry;
+import com.fortify.cli.aviator.fpr.model.ReplacementData;
+import com.fortify.cli.aviator.fpr.utils.FileUtils;
+import com.fortify.cli.aviator.fpr.utils.XmlUtils;
+import com.fortify.cli.aviator.util.FprHandle;
+import com.fortify.cli.aviator.util.StringUtil;
+
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.Unmarshaller;
+import lombok.Getter;
 
 /**
  * Orchestrates the processing of an FVDL file, extracting and finalizing vulnerabilities.

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright 2021, 2023 Open Text.
+/*
+ * Copyright 2021-2025 Open Text.
  *
  * The only warranties for products and services of Open Text
  * and its affiliates and licensors ("Open Text") are as may
@@ -9,15 +9,28 @@
  * liable for technical or editorial errors or omissions contained
  * herein. The information contained herein is subject to change
  * without notice.
- *******************************************************************************/
+ */
 package com.fortify.cli.fod.issue.helper;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.json.JsonHelper;
-import com.fortify.cli.common.output.transform.fields.RenameFieldsTransformer;
+import com.fortify.cli.common.json.transform.fields.RenameFieldsTransformer;
 import com.fortify.cli.common.rest.unirest.UnexpectedHttpResponseException;
 import com.fortify.cli.fod._common.rest.FoDUrls;
 import com.fortify.cli.fod._common.rest.embed.IFoDEntityEmbedder;
@@ -28,16 +41,12 @@ import com.fortify.cli.fod.issue.cli.mixin.FoDIssueEmbedMixin;
 import com.fortify.cli.fod.issue.cli.mixin.FoDIssueIncludeMixin;
 import com.fortify.cli.fod.release.helper.FoDReleaseDescriptor;
 import com.fortify.cli.fod.release.helper.FoDReleaseHelper;
+
 import io.micrometer.common.util.StringUtils;
 import kong.unirest.HttpRequest;
 import kong.unirest.HttpResponse;
 import kong.unirest.UnirestInstance;
 import lombok.Getter;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
-import java.util.*;
-import java.util.stream.Collectors;
 
 public class FoDIssueHelper {
     private static final Log LOG = LogFactory.getLog(FoDIssueHelper.class);
@@ -56,11 +65,11 @@ public class FoDIssueHelper {
     }
 
     public static final ArrayNode getReleaseIssues(UnirestInstance unirest,
-                                                   String releaseId,
-                                                   FoDIssueIncludeMixin includeMixin,
-                                                   FoDIssueEmbedMixin embedMixin,
-                                                   String filtersParamValue,
-                                                   boolean failOnError) {
+                                                String releaseId,
+                                                FoDIssueIncludeMixin includeMixin,
+                                                FoDIssueEmbedMixin embedMixin,
+                                                String filtersParamValue,
+                                                boolean failOnError) {
         LOG.debug("Retrieving issues for release id: " + releaseId);
         FoDReleaseDescriptor releaseDescriptor = FoDReleaseHelper.getReleaseDescriptorFromId(unirest,
                 Integer.parseInt(releaseId), true );

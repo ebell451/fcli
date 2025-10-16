@@ -1,7 +1,22 @@
+/*
+ * Copyright 2021-2025 Open Text.
+ *
+ * The only warranties for products and services of Open Text
+ * and its affiliates and licensors ("Open Text") are as may
+ * be set forth in the express warranty statements accompanying
+ * such products and services. Nothing herein should be construed
+ * as constituting an additional warranty. Open Text shall not be
+ * liable for technical or editorial errors or omissions contained
+ * herein. The information contained herein is subject to change
+ * without notice.
+ */
 package com.fortify.cli.aviator.ssc.helper;
 
+import java.util.ArrayList;
 import java.util.List;
+
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fortify.cli.common.json.JsonHelper;
 import com.fortify.cli.common.progress.helper.IProgressWriter;
 import com.fortify.cli.common.progress.helper.ProgressWriterType;
 
@@ -9,8 +24,6 @@ import kong.unirest.UnirestInstance;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import java.util.ArrayList;
-import com.fortify.cli.common.json.JsonHelper;
 
 @RequiredArgsConstructor
 public class AviatorSSCPrepareHelper {

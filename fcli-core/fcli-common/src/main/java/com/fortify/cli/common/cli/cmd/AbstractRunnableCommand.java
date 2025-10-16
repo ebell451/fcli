@@ -1,15 +1,15 @@
-/*******************************************************************************
- * Copyright 2021, 2023 Open Text.
+/*
+ * Copyright 2021-2025 Open Text.
  *
- * The only warranties for products and services of Open Text 
- * and its affiliates and licensors ("Open Text") are as may 
- * be set forth in the express warranty statements accompanying 
- * such products and services. Nothing herein should be construed 
- * as constituting an additional warranty. Open Text shall not be 
- * liable for technical or editorial errors or omissions contained 
- * herein. The information contained herein is subject to change 
+ * The only warranties for products and services of Open Text
+ * and its affiliates and licensors ("Open Text") are as may
+ * be set forth in the express warranty statements accompanying
+ * such products and services. Nothing herein should be construed
+ * as constituting an additional warranty. Open Text shall not be
+ * liable for technical or editorial errors or omissions contained
+ * herein. The information contained herein is subject to change
  * without notice.
- *******************************************************************************/
+ */
 package com.fortify.cli.common.cli.cmd;
 
 import java.io.File;
@@ -20,8 +20,10 @@ import java.util.concurrent.Callable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fortify.cli.common.cli.mixin.CommandHelperMixin;
 import com.fortify.cli.common.cli.mixin.ICommandAware;
 import com.fortify.cli.common.cli.util.FcliCommandExecutorFactory;
+import com.fortify.cli.common.cli.util.FcliCommandSpecHelper;
 import com.fortify.cli.common.log.LogMaskHelper;
 import com.fortify.cli.common.log.LogMaskLevel;
 import com.fortify.cli.common.log.LogMaskSource;
@@ -31,8 +33,10 @@ import com.fortify.cli.common.util.FcliBuildProperties;
 import com.fortify.cli.common.util.JavaHelper;
 
 import ch.qos.logback.classic.Level;
+import lombok.AccessLevel;
 import lombok.Getter;
 import picocli.CommandLine.ArgGroup;
+import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
@@ -53,6 +57,7 @@ public abstract class AbstractRunnableCommand implements Callable<Integer> {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRunnableCommand.class);
     // Have picocli inject the CommandSpec representing the current command
     @Spec private CommandSpec commandSpec;
+    @Getter(AccessLevel.PROTECTED) @Mixin private CommandHelperMixin commandHelper;
     
     // Boolean indicating whether mixins have already been initialized by
     // the initMixins() method
@@ -89,7 +94,7 @@ public abstract class AbstractRunnableCommand implements Callable<Integer> {
     protected final void initialize() {
         if ( !initialized ) {
             registerLogMasks(commandSpec);
-            initMixins(commandSpec, commandSpec.mixins());
+            initMixins(commandSpec);
             logVersionAndArgs(commandSpec);
             initialized = true;
         }
@@ -119,16 +124,11 @@ public abstract class AbstractRunnableCommand implements Callable<Integer> {
      * This method recursively iterates over all given mixins to inject our {@link CommandSpec} 
      * into any mixins implementing the {@link ICommandAware} interface.
      */
-    private static final void initMixins(CommandSpec commandSpec, Map<String, CommandSpec> mixins) {
-        if ( mixins != null ) {
-            for ( CommandSpec mixin : mixins.values() ) {
-                Object userObject = mixin.userObject();
-                if ( userObject!=null && userObject instanceof ICommandAware) {
-                    ((ICommandAware)userObject).setCommandSpec(commandSpec);
-                }
-                initMixins(commandSpec, mixin.mixins());
-            }
-        }
+    private static final void initMixins(CommandSpec commandSpec) {
+        FcliCommandSpecHelper.getAllMixinsStream(commandSpec)
+            .map(mixin->mixin.userObject())
+            .filter(userObject->userObject!=null && userObject instanceof ICommandAware)
+            .forEach(userObject->((ICommandAware)userObject).setCommandSpec(commandSpec));
     }
 
     /**
