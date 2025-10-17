@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.formkiq.graalvm.annotations.Reflectable;
 import com.fortify.cli.common.json.JsonHelper;
 import com.fortify.cli.common.progress.helper.IProgressWriter;
 import com.fortify.cli.common.progress.helper.ProgressWriterType;
@@ -29,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 public class AviatorSSCPrepareHelper {
     private final UnirestInstance unirest;
 
-    @Builder @Data
+    @Builder @Data @Reflectable
     public static class PrepareOptions {
         private String issueTemplateNameOrId;
         private boolean allIssueTemplates;
@@ -37,21 +38,21 @@ public class AviatorSSCPrepareHelper {
         private boolean allAppVersions;
     }
 
-    @Data
+    @Data @Reflectable
     public static class PrepareResult {
         private final List<ResultEntry> entries = new ArrayList<>();
         public void addEntry(String entity, String status, String details) { entries.add(new ResultEntry(status, entity, details)); }
         public JsonNode toJsonNode() { return JsonHelper.getObjectMapper().valueToTree(entries); }
     }
 
-    @Data @RequiredArgsConstructor
+    @Data @RequiredArgsConstructor @Reflectable
     private static class ResultEntry {
         private final String status;
         private final String entity;
         private final String details;
     }
 
-    @Data
+    @Data @Reflectable
     public static class ResultCounter {
         private int succeeded = 0, failed = 0, skipped = 0;
         public int getTotal() { return succeeded + failed + skipped; }
