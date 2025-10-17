@@ -12,6 +12,8 @@
  */
 package com.fortify.cli.ssc.issue.helper;
 
+import java.util.List;
+
 import com.formkiq.graalvm.annotations.Reflectable;
 import com.fortify.cli.common.json.JsonNodeHolder;
 
@@ -25,4 +27,13 @@ public class SSCIssueFilterSetDescriptor extends JsonNodeHolder {
     private String guid;
     private String title;
     private boolean defaultFilterSet;
+    private List<Folder> folders;
+    
+    @Data @NoArgsConstructor @Reflectable
+    public static class Folder {
+        private Integer id;
+        private String guid;
+        private String name;
+        private String color;
+    }
 }
