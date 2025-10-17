@@ -65,7 +65,6 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
     @Option(names={"--module", "-m"}, required = true) private McpModule module;
     
     public Integer call() throws Exception {
-        super.initialize(); // Initialize mixins etc
         
         McpServer.sync(new StdioServerTransportProvider(new JacksonMcpJsonMapper(new ObjectMapper())))
                 .serverInfo("fcli", FcliBuildProperties.INSTANCE.getFcliVersion())

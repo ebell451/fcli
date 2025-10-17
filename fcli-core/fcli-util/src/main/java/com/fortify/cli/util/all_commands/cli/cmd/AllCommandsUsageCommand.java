@@ -26,7 +26,6 @@ public final class AllCommandsUsageCommand extends AbstractRunnableCommand {
     
     @Override
     public final Integer call() {
-        initialize();
         selectorMixin.getSelectedCommands().getSpecs()
             .forEach(this::printHelp);
         return 0;

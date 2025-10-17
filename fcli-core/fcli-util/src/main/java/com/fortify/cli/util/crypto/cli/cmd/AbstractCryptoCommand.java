@@ -21,7 +21,6 @@ import lombok.SneakyThrows;
 public abstract class AbstractCryptoCommand extends AbstractRunnableCommand {
     @Override @SneakyThrows
     public final Integer call() {
-        initialize();
         String prompt = getCommandHelper().getMessageResolver().getMessageString("prompt")+" ";
         String value;
         if ( System.console()!=null ) {

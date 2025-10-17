@@ -23,7 +23,6 @@ public abstract class AbstractActionGetCommand extends AbstractRunnableCommand {
     
     @Override
     public final Integer call() {
-        initialize();
         System.out.println(actionResolver.loadActionContents(getType(), ActionValidationHandler.WARN));
         return 0;
     }

@@ -53,7 +53,6 @@ public abstract class AbstractActionAsciidocCommand extends AbstractRunnableComm
     
     @Override @SneakyThrows
     public final Integer call() {
-        initialize();
         var contents = generateHeader();
         contents += ActionLoaderHelper
             .streamAsActions(actionSourceResolver.getActionSources(getType()), ActionValidationHandler.IGNORE)

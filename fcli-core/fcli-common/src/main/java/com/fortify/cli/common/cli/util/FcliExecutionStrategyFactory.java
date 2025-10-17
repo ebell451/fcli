@@ -16,12 +16,14 @@ import picocli.CommandLine;
 import picocli.CommandLine.IExecutionStrategy;
 
 /**
- * Factory for creating the standard fcli execution strategy with UnirestContext support.
+ * Factory for creating the standard fcli execution strategy combining
+ * command initialization (CommandSpec & log mask injection, version & args logging)
+ * with UnirestContext lifecycle management in a single iteration.
  */
 public class FcliExecutionStrategyFactory {
     public static IExecutionStrategy createExecutionStrategy() {
         IExecutionStrategy defaultStrategy = new CommandLine.RunLast();
-        return new UnirestContextExecutionStrategy(defaultStrategy);
+        return new FcliInitializationExecutionStrategy(defaultStrategy);
     }
 
     public static CommandLine configureCommandLine(CommandLine cmd) {

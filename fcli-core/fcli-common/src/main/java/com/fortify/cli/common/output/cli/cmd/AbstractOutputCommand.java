@@ -47,7 +47,6 @@ public abstract class AbstractOutputCommand extends AbstractRunnableCommand
 
     @Override
     public Integer call() {
-        initialize();
         getOutputHelper().write(getObjectNodeProducer());
         return 0;
     }

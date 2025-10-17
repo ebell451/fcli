@@ -45,7 +45,6 @@ public abstract class AbstractActionRunCommand extends AbstractRunnableCommand {
     
     @Override @SneakyThrows
     public final Integer call() {
-        initialize();
         try (var progressWriter = progressWriterFactory.create()) {
             progressWriter.writeProgress("Loading action %s", actionResolver.getAction());
             var action = actionResolver.loadAction(getType(), actionValidationMixin.getActionValidationHandler());
