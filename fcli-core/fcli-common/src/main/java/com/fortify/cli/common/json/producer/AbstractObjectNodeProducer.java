@@ -61,13 +61,13 @@ public abstract class AbstractObjectNodeProducer implements IObjectNodeProducer 
         JsonNode transformed = applyInputTransformers(input);
         if ( transformed==null || transformed.isNull() ) { return; }
         if ( transformed.isObject() ) {
-            handleRecordNode((ObjectNode)transformed, consumer);
+            processSingleRecord((ObjectNode)transformed, consumer);
         } else if ( transformed.isArray() ) {
             var array = (ArrayNode)transformed;
             for ( var it = array.elements(); it.hasNext(); ) {
                 var n = it.next();
                 if ( n.isObject() ) {
-                    if ( Break.TRUE == handleRecordNode((ObjectNode)n, consumer) ) { break; }
+                    if ( Break.TRUE == processSingleRecord((ObjectNode)n, consumer) ) { break; }
                 } else if ( !n.isNull() && !n.isMissingNode() ) {
                     // We only allow object elements; any other non-null element is unexpected
                     throw new FcliBugException("Unsupported record node type in array: "+n.getNodeType());
@@ -85,7 +85,7 @@ public abstract class AbstractObjectNodeProducer implements IObjectNodeProducer 
         return current;
     }
 
-    private Break handleRecordNode(ObjectNode node, IObjectNodeConsumer consumer) {
+    protected Break processSingleRecord(ObjectNode node, IObjectNodeConsumer consumer) {
         ObjectNode current = node;
         for ( var t : recordTransformers ) {
             var transformed = t.apply(current);

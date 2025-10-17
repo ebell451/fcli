@@ -12,9 +12,8 @@
  */
 package com.fortify.cli.util.all_commands.cli.cmd;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.output.cli.cmd.AbstractOutputCommand;
-import com.fortify.cli.common.output.cli.cmd.IJsonNodeSupplier;
 import com.fortify.cli.util.all_commands.cli.mixin.AllCommandsCommandSelectorMixin;
 import com.fortify.cli.util.all_commands.cli.mixin.AllCommandsOutputHelperMixins;
 
@@ -23,17 +22,15 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 
 @Command(name = AllCommandsOutputHelperMixins.List.CMD_NAME)
-public final class AllCommandsListCommand extends AbstractOutputCommand implements IJsonNodeSupplier {
+public final class AllCommandsListCommand extends AbstractOutputCommand {
     @Getter @Mixin private AllCommandsOutputHelperMixins.List outputHelper;
     @Mixin private AllCommandsCommandSelectorMixin selectorMixin;
-    
+
     @Override
-    public JsonNode getJsonNode() {
-        return selectorMixin.getSelectedCommands().getNodes();
+    protected IObjectNodeProducer getObjectNodeProducer() { 
+        return selectorMixin.getObjectNodeProducer(); 
     }
-    
+
     @Override
-    public boolean isSingular() {
-        return false;
-    }
+    public boolean isSingular() { return false; }
 }

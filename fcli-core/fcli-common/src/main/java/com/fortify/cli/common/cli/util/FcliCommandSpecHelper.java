@@ -29,8 +29,9 @@ import com.fortify.cli.common.log.MaskValue;
 import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.mcp.MCPInclude;
 import com.fortify.cli.common.output.cli.cmd.IOutputHelperSupplier;
-import com.fortify.cli.common.output.cli.mixin.QueryOptionMixin;
+import com.fortify.cli.common.spel.query.IQueryExpressionSupplier;
 import com.fortify.cli.common.spel.query.QueryExpression;
+import com.fortify.cli.common.spel.query.QueryExpressionComposite;
 import com.fortify.cli.common.util.JavaHelper;
 import com.fortify.cli.common.util.ReflectionHelper;
 
@@ -247,16 +248,13 @@ public class FcliCommandSpecHelper {
     }
         
     public static final Optional<QueryExpression> getQueryExpression(CommandSpec commandSpec) {
-        return getQueryOptionMixin(commandSpec)
-                .map(s -> s.getQueryExpression())
-                .filter(Objects::nonNull);
-    }
-
-    public static final Optional<QueryOptionMixin> getQueryOptionMixin(CommandSpec commandSpec) {
-        return getAllMixinsStream(commandSpec)
-                .map(m -> m.userObject())
-                .filter(o -> o instanceof QueryOptionMixin)
-                .findFirst()
-                .map(o -> (QueryOptionMixin)o);
+        var expressions = getAllUserObjectsStream(commandSpec)
+                .filter(o -> o instanceof IQueryExpressionSupplier)
+                .map(o -> ((IQueryExpressionSupplier)o).getQueryExpression())
+                .filter(Objects::nonNull)
+                .toList();
+        if ( expressions.isEmpty() ) { return Optional.empty(); }
+        if ( expressions.size()==1 ) { return Optional.of(expressions.get(0)); }
+        return Optional.of(QueryExpressionComposite.and(expressions));
     }
 }

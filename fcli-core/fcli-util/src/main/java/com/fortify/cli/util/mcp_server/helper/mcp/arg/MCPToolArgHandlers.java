@@ -23,6 +23,7 @@ import com.fortify.cli.common.cli.util.FcliCommandSpecHelper;
 import com.fortify.cli.common.log.LogSensitivityLevel;
 import com.fortify.cli.common.log.MaskValue;
 import com.fortify.cli.common.mcp.MCPExclude;
+import com.fortify.cli.common.spel.query.IQueryExpressionSupplier;
 import com.fortify.cli.common.util.ReflectionHelper;
 
 import io.modelcontextprotocol.spec.McpSchema.JsonSchema;
@@ -75,7 +76,8 @@ public final class MCPToolArgHandlers {
     }
 
     private static final boolean hasGenericQueryOpt(CommandSpec spec) {
-        return FcliCommandSpecHelper.getQueryOptionMixin(spec).isPresent();
+        return FcliCommandSpecHelper.getAllUserObjectsStream(spec)
+                .anyMatch(o -> o instanceof IQueryExpressionSupplier);
     }
 
     private static <T extends ArgSpec> void addArgSpecHelpers(List<IMCPToolArgHandler> result, List<T> argSpecs, Function<T, IMCPToolArgHandler> factory) {
