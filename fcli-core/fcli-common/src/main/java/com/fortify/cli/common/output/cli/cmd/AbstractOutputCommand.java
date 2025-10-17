@@ -24,6 +24,8 @@ import com.fortify.cli.common.json.producer.RequestObjectNodeProducer;
 import com.fortify.cli.common.json.producer.RequestObjectNodeProducer.RequestObjectNodeProducerBuilder;
 import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer;
 import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer.SimpleObjectNodeProducerBuilder;
+import com.fortify.cli.common.json.producer.StreamingObjectNodeProducer;
+import com.fortify.cli.common.json.producer.StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder;
 import com.fortify.cli.common.output.cli.mixin.IOutputHelper;
 import com.fortify.cli.common.output.writer.ISingularSupplier;
 
@@ -72,8 +74,8 @@ public abstract class AbstractOutputCommand extends AbstractRunnableCommand
         return simpleObjectNodeProducerBuilder(true).source(node).build();
     }
 
-    private IObjectNodeProducer buildRequestProducer(HttpRequest<?> initialRequest) {
-        return requestObjectNodeProducerBuilder(true).initialRequest(initialRequest).build();
+    private IObjectNodeProducer buildRequestProducer(HttpRequest<?> baseRequest) {
+        return requestObjectNodeProducerBuilder(true).baseRequest(baseRequest).build();
     }
 
     /**
@@ -96,6 +98,18 @@ public abstract class AbstractOutputCommand extends AbstractRunnableCommand
      */
     protected final RequestObjectNodeProducerBuilder<?, ?> requestObjectNodeProducerBuilder(boolean applyAllFromSpec) {
         var b = RequestObjectNodeProducer.builder().commandHelper(getCommandHelper());
+        if ( applyAllFromSpec ) { b.applyAllFromSpec(); }
+        return b;
+    }
+    
+    /**
+     * Convenience method to create and configure a {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder}.
+     * This sets the {@code commandHelper}, and if {@code applyFromSpec} is true, {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder#applyAllFromSpec()} is invoked.
+     * @param applyAllFromSpec Whether to invoke {@code applyFromSpec()} on the builder
+     * @return Partially configured builder instance
+     */
+    protected final StreamingObjectNodeProducerBuilder<?, ?> streamingObjectNodeProducerBuilder(boolean applyAllFromSpec) {
+        var b = StreamingObjectNodeProducer.builder().commandHelper(getCommandHelper());
         if ( applyAllFromSpec ) { b.applyAllFromSpec(); }
         return b;
     }

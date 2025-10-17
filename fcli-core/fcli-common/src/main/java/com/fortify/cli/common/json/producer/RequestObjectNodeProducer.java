@@ -33,14 +33,14 @@ import lombok.experimental.SuperBuilder;
  */
 @SuperBuilder
 public class RequestObjectNodeProducer extends AbstractObjectNodeProducer {
-    @Getter private final HttpRequest<?> initialRequest;
+    @Getter private final HttpRequest<?> baseRequest;
     @Singular private final List<IHttpRequestUpdater> requestUpdaters;
     private final INextPageRequestProducer nextPageRequestProducer;
     private final INextPageUrlProducer nextPageUrlProducer;
 
     @Override
     public void forEach(IObjectNodeConsumer consumer) {
-        HttpRequest<?> request = applyRequestUpdaters(initialRequest);
+        HttpRequest<?> request = applyRequestUpdaters(baseRequest);
         if ( nextPageRequestProducer!=null ) {
             PagingHelper.processPages(request, nextPageRequestProducer, r->handleResponse(r, consumer));
         } else if ( nextPageUrlProducer!=null ) {

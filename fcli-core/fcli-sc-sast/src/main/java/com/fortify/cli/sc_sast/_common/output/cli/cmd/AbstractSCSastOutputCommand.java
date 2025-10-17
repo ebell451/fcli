@@ -12,6 +12,7 @@
  */
 package com.fortify.cli.sc_sast._common.output.cli.cmd;
 
+import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.output.cli.cmd.AbstractOutputCommand;
 import com.fortify.cli.common.output.product.IProductHelperSupplier;
 import com.fortify.cli.common.rest.unirest.IUnirestInstanceSupplier;
@@ -34,5 +35,21 @@ public abstract class AbstractSCSastOutputCommand extends AbstractOutputCommand
     
     protected final UnirestInstance getSscUnirestInstance() {
         return unirestInstanceSupplier.getSscUnirestInstance();
+    }
+
+    @Override
+    protected final IObjectNodeProducer getObjectNodeProducer() {
+        return getObjectNodeProducer(getUnirestInstance());
+    }
+
+    /**
+     * Overload allowing subclasses to access the SAST {@link UnirestInstance}. Subclasses can use
+     * both SAST and SSC instances if needed via {@link #getSscUnirestInstance()}.
+     * Default implementation delegates to {@link AbstractOutputCommand#getLegacyObjectNodeProducer()}.
+     * @param unirestInstance SAST Unirest instance
+     * @return Object node producer (default: legacy behavior)
+     */
+    protected IObjectNodeProducer getObjectNodeProducer(UnirestInstance unirestInstance) {
+        return getLegacyObjectNodeProducer();
     }
 }
