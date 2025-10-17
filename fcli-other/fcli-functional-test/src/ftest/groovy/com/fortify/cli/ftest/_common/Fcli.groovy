@@ -198,21 +198,22 @@ public class Fcli {
     // as this class (and IFortifyCLIRunner interface) is not available if the
     // ftest.fcli property points to an external fcli executable
     private static class ReflectiveRunner implements IRunner {
-        private Object obj;
+        private Class<?> runnerClass;
         
         @Override
         int run(List<String> args) {
-            if ( obj==null ) {
-                obj = Class.forName("com.fortify.cli.app.runner.DefaultFortifyCLIRunner").newInstance()
+            if ( runnerClass==null ) {
+                runnerClass = Class.forName("com.fortify.cli.app.runner.DefaultFortifyCLIRunner")
             }
-            return (int)obj.invokeMethod("run", args)
+            // Static run(String... args) method; need to convert List<String> to Object[] and invoke reflectively
+            def method = runnerClass.getMethod("run", String[].class)
+            String[] a = args as String[]
+            return (int)method.invoke(null, (Object)a)
         }
         
         @Override
         void close() {
-            if ( obj!=null ) {
-                obj.invokeMethod("close", [])
-            }
+            // No-op; DefaultFortifyCLIRunner no longer requires explicit close
         }
     }
     
