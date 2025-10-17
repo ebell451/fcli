@@ -56,6 +56,10 @@ public abstract class AbstractOutputCommand extends AbstractRunnableCommand
      * Default implementation builds either a request-based or simple JSON-node producer depending on implemented interfaces.
      */
     protected IObjectNodeProducer getObjectNodeProducer() {
+        return getLegacyObjectNodeProducer();
+    }
+
+    protected final IObjectNodeProducer getLegacyObjectNodeProducer() {
         if ( this instanceof IBaseRequestSupplier brs ) {
             return buildRequestProducer(brs.getBaseRequest());
         } else if ( this instanceof IJsonNodeSupplier jns) {
