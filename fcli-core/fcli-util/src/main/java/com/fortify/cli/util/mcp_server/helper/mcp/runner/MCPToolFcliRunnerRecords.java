@@ -38,6 +38,6 @@ public final class MCPToolFcliRunnerRecords extends AbstractMCPToolFcliRunner {
     
     @Override
     protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
-        return MCPToolFcliRunnerHelper.collectRecords(fullCmd).asCallToolResult();
+        return MCPToolFcliRunnerHelper.collectRecords(fullCmd, getCommandSpec()).asCallToolResult();
     }
 }

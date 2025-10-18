@@ -35,7 +35,7 @@ public final class MCPToolFcliRunnerPlainText extends AbstractMCPToolFcliRunner 
     
     @Override
     protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
-        var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd);
+        var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd, getCommandSpec());
         return MCPToolResultPlainText.from(result).asCallToolResult();
     }
 }

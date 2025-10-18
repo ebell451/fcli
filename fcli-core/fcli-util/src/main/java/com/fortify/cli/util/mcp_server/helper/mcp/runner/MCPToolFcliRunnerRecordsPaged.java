@@ -38,7 +38,7 @@ public final class MCPToolFcliRunnerRecordsPaged extends AbstractMCPToolFcliRunn
     @Override
     protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
         var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
-        var result = MCPToolFcliRecordsCache.INSTANCE.getOrCollect(fullCmd, refresh);
+    var result = MCPToolFcliRecordsCache.INSTANCE.getOrCollect(fullCmd, refresh, getCommandSpec());
         var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
         //var limit = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_LIMIT, 20);
         var limit = 20;

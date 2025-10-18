@@ -29,6 +29,8 @@ import com.fortify.cli.common.json.JsonHelper;
 import com.fortify.cli.common.json.producer.EmptyObjectNodeProducer;
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
+import com.fortify.cli.common.mcp.MCPDefaultValue;
+import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamGeneratorSupplier;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamValueGenerator;
@@ -63,6 +65,7 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     @Mixin private FoDFiltersParamMixin filterParamMixin;
     @Mixin private FoDIssueEmbedMixin embedMixin;
     @Mixin private FoDIssueIncludeMixin includeMixin;
+    @MCPExclude @MCPDefaultValue("true")
     @Option(names = {"--fast-output"}) private boolean fastOutput;
     @Getter private final IServerSideQueryParamValueGenerator serverSideQueryParamGenerator = new FoDFiltersParamGenerator()
             .add("id","id")
@@ -226,9 +229,12 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     }
     
     private boolean isEffectiveFastOutput() {
-        boolean streamingSupported = outputHelper.isStreamingOutputSupported();
         boolean appSpecified = appResolver.getAppNameOrId() != null;
         boolean releaseSpecified = releaseResolver.getQualifiedReleaseNameOrId() != null;
-        return fastOutput && streamingSupported && appSpecified && !releaseSpecified;
+        if ( !fastOutput || !appSpecified || releaseSpecified ) { return false; }
+        boolean streamingSupported = outputHelper.isStreamingOutputSupported();
+        boolean recordConsumerConfigured = getRecordConsumer()!=null;
+        // Streaming supported by output format OR record consumer present (actions / MCP server)
+        return (streamingSupported || recordConsumerConfigured);
     }
 }

@@ -51,7 +51,7 @@ public final class MCPToolArgHandlers {
     }
     
     public final String getFcliCmdArgs(Map<String, Object> toolArgs) {
-        return mcpToolArgHandlers.stream().map(h->h.getFcliCmdArgs(toolArgs)).collect(Collectors.joining(" "));
+        return mcpToolArgHandlers.stream().map(h->h.getFcliCmdArgs(toolArgs==null?Map.of():toolArgs)).collect(Collectors.joining(" ")).trim();
     }
 
     private static final List<IMCPToolArgHandler> createToolSpecArgHelpers(CommandSpec spec, boolean paged) {

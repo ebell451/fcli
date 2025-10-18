@@ -13,13 +13,21 @@
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Consumer;
+
+import org.apache.commons.lang3.StringUtils;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.cli.util.FcliCommandExecutorFactory;
+import com.fortify.cli.common.mcp.MCPDefaultValue;
 import com.fortify.cli.common.util.OutputHelper.OutputType;
 import com.fortify.cli.common.util.OutputHelper.Result;
+import com.fortify.cli.common.util.ReflectionHelper;
+
+import picocli.CommandLine.Model.CommandSpec;
 
 /**
  * Helper methods for running a given fcli command, collecting either records or stdout
@@ -27,30 +35,42 @@ import com.fortify.cli.common.util.OutputHelper.Result;
  * @author Ruud Senden
  */
 public class MCPToolFcliRunnerHelper {
-    static final Result collectStdout(String fullCmd) {
-        return createBuilder(fullCmd)
+    static final Result collectStdout(String fullCmd, CommandSpec spec) {
+        return createBuilder(fullCmd, spec)
             .stdoutOutputType(OutputType.collect)
             .build().create().execute();
     }
     
-    static final Result collectRecords(String fullCmd, Consumer<ObjectNode> recordConsumer) {
-        return createBuilder(fullCmd)
+    static final Result collectRecords(String fullCmd, Consumer<ObjectNode> recordConsumer, CommandSpec spec) {
+        return createBuilder(fullCmd, spec)
             .stdoutOutputType(OutputType.suppress)
             .recordConsumer(recordConsumer)
             .build().create().execute();
     }
     
-    static final MCPToolResultRecords collectRecords(String fullCmd) {
+    static final MCPToolResultRecords collectRecords(String fullCmd, CommandSpec spec) {
         var records = new ArrayList<JsonNode>();
-        var result = collectRecords(fullCmd, records::add);
+        var result = collectRecords(fullCmd, records::add, spec);
         return MCPToolResultRecords.from(result, records);
     }
     
-    private static final FcliCommandExecutorFactory.FcliCommandExecutorFactoryBuilder createBuilder(String fullCmd) {
+    private static final FcliCommandExecutorFactory.FcliCommandExecutorFactoryBuilder createBuilder(String fullCmd, CommandSpec spec) {
         return FcliCommandExecutorFactory.builder()
             .cmd(fullCmd)
-            .onFail(r->{}) // Continue on non-zero exit code, assuming stdout/stderr shows more info about the error, which in turn can be
-                        //  used by the LLM to provide suggestions on how to fix.
+            .defaultOptionsIfNotPresent(collectMcpDefaultOptions(spec))
+            .onFail(r->{})
             .stderrOutputType(OutputType.collect);           
+    }
+
+    private static final Map<String,String> collectMcpDefaultOptions(CommandSpec spec) {
+        if ( spec==null ) { return Map.of(); }
+        var result = new LinkedHashMap<String,String>();
+        spec.options().forEach(o->{
+            var defVal = ReflectionHelper.getAnnotationValue(o.userObject(), MCPDefaultValue.class, MCPDefaultValue::value, ()->null);
+            if ( StringUtils.isBlank(defVal) ) { return; }
+            var name = o.longestName();
+            if ( name!=null ) { result.put(name, defVal); }
+        });
+        return result;
     }
 }

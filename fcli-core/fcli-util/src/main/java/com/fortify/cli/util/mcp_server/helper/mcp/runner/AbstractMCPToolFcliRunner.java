@@ -42,7 +42,8 @@ abstract class AbstractMCPToolFcliRunner implements IMCPToolRunner {
      */
     private final String getFullCmd(CallToolRequest request) {
         var cmd = getCommandSpec().qualifiedName(" ");
-        var args = request==null || request.arguments()==null ? "" : getToolSpecArgHelper().getFcliCmdArgs(request.arguments());
+        var providedArgs = request==null ? null : request.arguments();
+        var args = providedArgs==null ? "" : getToolSpecArgHelper().getFcliCmdArgs(providedArgs);
         return String.format("%s %s", cmd, args).trim();
     }
     
