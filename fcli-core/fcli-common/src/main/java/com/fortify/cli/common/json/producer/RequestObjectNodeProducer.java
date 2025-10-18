@@ -34,15 +34,29 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class RequestObjectNodeProducer extends AbstractObjectNodeProducer {
     @Getter private final HttpRequest<?> baseRequest;
+    /** Optional unirest instance; if provided and only a {@link INextPageUrlProducer} is configured, we convert it
+     *  to an {@link INextPageRequestProducer} to stream pages instead of collecting them. */
+    @Getter private final kong.unirest.UnirestInstance unirestInstance;
     @Singular private final List<IHttpRequestUpdater> requestUpdaters;
     private final INextPageRequestProducer nextPageRequestProducer;
     private final INextPageUrlProducer nextPageUrlProducer;
+    // Test-only support: if configured, simulate multi-page responses without performing HTTP requests
+    @Singular private final java.util.List<JsonNode> testPageBodies;
 
     @Override
     public void forEach(IObjectNodeConsumer consumer) {
+        // Test-mode shortcut: simulate paging if testPageBodies configured
+        if ( testPageBodies!=null && !testPageBodies.isEmpty() ) {
+            for ( var body : testPageBodies ) { process(body, consumer); }
+            return;
+        }
         HttpRequest<?> request = applyRequestUpdaters(baseRequest);
-        if ( nextPageRequestProducer!=null ) {
-            PagingHelper.processPages(request, nextPageRequestProducer, r->handleResponse(r, consumer));
+        INextPageRequestProducer effectiveNextPageRequestProducer = nextPageRequestProducer;
+        if ( effectiveNextPageRequestProducer==null && nextPageUrlProducer!=null && unirestInstance!=null ) {
+            effectiveNextPageRequestProducer = PagingHelper.asNextPageRequestProducer(unirestInstance, nextPageUrlProducer);
+        }
+        if ( effectiveNextPageRequestProducer!=null ) {
+            PagingHelper.processPages(request, effectiveNextPageRequestProducer, r->handleResponse(r, consumer));
         } else if ( nextPageUrlProducer!=null ) {
             PagingHelper.pagedRequest(request, nextPageUrlProducer).ifSuccess(r->handleResponse(r, consumer)).ifFailure(IfFailureHandler::handle);
         } else {
@@ -64,6 +78,10 @@ public class RequestObjectNodeProducer extends AbstractObjectNodeProducer {
     public static class RequestObjectNodeProducerBuilderImpl extends RequestObjectNodeProducerBuilder<RequestObjectNodeProducer, RequestObjectNodeProducerBuilderImpl> {
         public RequestObjectNodeProducerBuilderImpl applyAllFrom(ObjectNodeProducerApplyFrom applyFrom) {
             super.applyAllFrom(applyFrom);
+            // Auto-apply Unirest instance if command supplies it
+            var ch = getRequiredCommandHelper();
+            ch.getCommandAs(com.fortify.cli.common.rest.unirest.IUnirestInstanceSupplier.class)
+                .ifPresent(s -> super.unirestInstance(s.getUnirestInstance()));
             applyRequestUpdatersFrom(applyFrom);
             applyNextPageUrlProducerFrom(applyFrom);
             return self();
@@ -87,6 +105,11 @@ public class RequestObjectNodeProducer extends AbstractObjectNodeProducer {
             if (o instanceof INextPageUrlProducerSupplier s) {
                 nextPageUrlProducer(s.getNextPageUrlProducer());
             }
+        }
+
+        /** Configure unirest instance to enable streaming paging conversion. */
+        public RequestObjectNodeProducerBuilderImpl unirestInstance(kong.unirest.UnirestInstance unirestInstance) {
+            return (RequestObjectNodeProducerBuilderImpl)super.unirestInstance(unirestInstance);
         }
     }
 }

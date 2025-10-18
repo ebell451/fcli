@@ -168,7 +168,6 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
         String releaseName = releaseDescriptor.getReleaseName();
         HttpRequest<?> request = unirest.get(FoDUrls.VULNERABILITIES)
                 .routeParam("relId", releaseId)
-                .queryString("limit", "10")
                 .queryString("orderBy", "severity")
                 .queryString("orderDirection", "ASC");
         return requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
