@@ -47,13 +47,8 @@ public class FoDIssueHelper {
     public static class IssueAggregationData {
         private final Set<String> releaseNames;
         private final Set<String> releaseIds;
-        private final Set<String> ids; // issue ids across releases
-        private final Set<String> vulnIds; // may be empty
-
-        private final String releaseNamesString;
-        private final String releaseIdsString;
-        private final String idsString; // sorted numeric ascending for consistency
-        private final String vulnIdsString;
+        private final Set<String> ids;
+        private final Set<String> vulnIds;
 
         /** Factory for single-release records; extracts properties from issue node. */
         public static IssueAggregationData forSingleRelease(ObjectNode issue) {
@@ -66,11 +61,39 @@ public class FoDIssueHelper {
                 .releaseIds(Set.of(releaseId))
                 .ids(Set.of(id))
                 .vulnIds(Set.of(vulnId))
-                .releaseNamesString(releaseName)
-                .releaseIdsString(releaseId)
-                .idsString(id)
-                .vulnIdsString(vulnId)
                 .build();
+        }
+
+        /** Factory returning an IssueAggregationData instance with all aggregation fields empty. */
+        public static IssueAggregationData blank() {
+            return IssueAggregationData.builder()
+                .releaseNames(Collections.emptySet())
+                .releaseIds(Collections.emptySet())
+                .ids(Collections.emptySet())
+                .vulnIds(Collections.emptySet())
+                .build();
+        }
+
+        public String getVulnIdsString() {
+            return asString(vulnIds);
+        }
+
+        public String getReleaseNamesString() {
+            return asString(releaseNames);
+        }
+
+        public String getReleaseIdsString() {
+            return asString(releaseIds);
+        }
+
+        public String getIdsString() {
+        return asString(ids);
+        }
+        
+        private String asString(Set<String> values) {
+            return values==null || values.isEmpty()
+                    ? "N/A" 
+                    : String.join(", ", values);
         }
     }
 
@@ -150,10 +173,6 @@ public class FoDIssueHelper {
                     .releaseIds(releaseIds)
                     .ids(issueIds)
                     .vulnIds(vulnIds)
-                    .releaseNamesString(String.join(", ", releaseNames))
-                    .releaseIdsString(String.join(", ", releaseIds))
-                    .idsString(String.join(", ", issueIds))
-                    .vulnIdsString(String.join(", ", vulnIds))
                     .build();
             transformRecord(record, data);
             result.add(record);

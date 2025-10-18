@@ -47,7 +47,7 @@ public abstract class AbstractRecordWriter<T> implements IRecordWriter {
         var formattedRecord = getRecordFormatter(record).apply(record);
         append(getOut(formattedRecord), formattedRecord);
     }
-    
+
     @Override @SneakyThrows
     public final void close() {
         var writer = getWriter();

@@ -15,7 +15,9 @@ package com.fortify.cli.fod.issue.cli.cmd;
 // Removed unused logging imports
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -50,10 +52,10 @@ import kong.unirest.UnirestInstance;
 import lombok.Getter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
+import picocli.CommandLine.Option;
 
 @Command(name = OutputHelperMixins.List.CMD_NAME)
 public class FoDIssueListCommand extends AbstractFoDOutputCommand implements IServerSideQueryParamGeneratorSupplier {
-
     @Getter @Mixin private OutputHelperMixins.List outputHelper;
     @Mixin private FoDDelimiterMixin delimiterMixin; // injected in resolvers
     @Mixin private FoDAppResolverMixin.OptionalOption appResolver;
@@ -61,6 +63,7 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     @Mixin private FoDFiltersParamMixin filterParamMixin;
     @Mixin private FoDIssueEmbedMixin embedMixin;
     @Mixin private FoDIssueIncludeMixin includeMixin;
+    @Option(names = {"--fast-output"}) private boolean fastOutput;
     @Getter private final IServerSideQueryParamValueGenerator serverSideQueryParamGenerator = new FoDFiltersParamGenerator()
             .add("id","id")
             .add("vulnId","vulnId")
@@ -129,6 +132,40 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
      * @return Producer streaming merged issue records (empty if no releases)
      */
     private IObjectNodeProducer buildApplicationProducer(UnirestInstance unirest, String appId) {
+        return isEffectiveFastOutput() 
+                ? buildFastApplicationProducer(unirest, appId) 
+                : buildMergedApplicationProducer(unirest, appId);
+    }
+
+    /** Fast streaming producer for application issues: sequentially streams issues from all releases without merging, de-duplicating on instanceId. */
+    private IObjectNodeProducer buildFastApplicationProducer(UnirestInstance unirest, String appId) {
+        List<String> releaseIds = loadReleaseIdsForApp(unirest, appId);
+        if ( releaseIds.isEmpty() ) { return EmptyObjectNodeProducer.INSTANCE; }
+        Supplier<Stream<ObjectNode>> streamSupplier = () -> {
+            Set<String> seenInstanceIds = new HashSet<>();
+            return releaseIds.stream().flatMap(releaseId -> {
+                List<ObjectNode> list = new ArrayList<>();
+                buildReleaseIssuesProducer(unirest, releaseId).forEach(node -> {
+                    if ( node instanceof ObjectNode ) {
+                        ObjectNode o = (ObjectNode)node;
+                        String instanceId = o.has("instanceId") ? o.get("instanceId").asText() : null;
+                        if ( instanceId != null && seenInstanceIds.add(instanceId) ) {
+                            FoDIssueHelper.transformRecord(o, IssueAggregationData.blank());
+                            list.add(o);
+                        }
+                    }
+                    return Break.FALSE;
+                });
+                return list.stream();
+            });
+        };
+        return streamingObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .streamSupplier(streamSupplier)
+                .build();
+    }
+
+    /** Existing merged application producer; loads all issues then performs merge. */
+    private IObjectNodeProducer buildMergedApplicationProducer(UnirestInstance unirest, String appId) {
         List<String> releaseIds = loadReleaseIdsForApp(unirest, appId);
         if ( releaseIds.isEmpty() ) { return EmptyObjectNodeProducer.INSTANCE; }
         ArrayNode aggregated = JsonHelper.getObjectMapper().createArrayNode();
@@ -176,13 +213,22 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
                 .build();
     }
 
-    private JsonNode enrichIssueRecord(UnirestInstance unirest, String releaseName, com.fasterxml.jackson.databind.JsonNode n) {
+    private JsonNode enrichIssueRecord(UnirestInstance unirest, String releaseName, JsonNode n) {
         if ( n instanceof ObjectNode node ) {
             node.put("releaseName", releaseName);
             node.put("issueUrl", FoDIssueHelper.getIssueUrl(unirest, node.get("id").asText()));
-            IssueAggregationData data = IssueAggregationData.forSingleRelease(node);
+            IssueAggregationData data = isEffectiveFastOutput() 
+                    ? IssueAggregationData.blank() 
+                    : IssueAggregationData.forSingleRelease(node);
             FoDIssueHelper.transformRecord(node, data);
         }
         return n;
+    }
+    
+    private boolean isEffectiveFastOutput() {
+        boolean streamingSupported = outputHelper.isStreamingOutputSupported();
+        boolean appSpecified = appResolver.getAppNameOrId() != null;
+        boolean releaseSpecified = releaseResolver.getQualifiedReleaseNameOrId() != null;
+        return fastOutput && streamingSupported && appSpecified && !releaseSpecified;
     }
 }

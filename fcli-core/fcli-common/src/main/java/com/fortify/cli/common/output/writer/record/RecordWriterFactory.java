@@ -21,21 +21,21 @@ import com.fortify.cli.common.output.writer.record.impl.RecordWriterTable;
 import com.fortify.cli.common.output.writer.record.impl.RecordWriterXml;
 import com.fortify.cli.common.output.writer.record.impl.RecordWriterYaml;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 // Eventually, this would replace and moved to the output.writer.record package, using a single record writers
 // implementation for both actions and general fcli output framework.
 @RequiredArgsConstructor 
 public enum RecordWriterFactory {
-    csv(RecordWriterCsv::new),
-    table(RecordWriterTable::new),
-    expr(RecordWriterExpr::new),
-    json(RecordWriterJson::new),
-    xml(RecordWriterXml::new),
-    yaml(RecordWriterYaml::new);
+    csv(true, RecordWriterCsv::new),
+    table(false, RecordWriterTable::new),
+    expr(true, RecordWriterExpr::new),
+    json(true, RecordWriterJson::new),
+    xml(true, RecordWriterXml::new),
+    yaml(true, RecordWriterYaml::new);
 
+    @Getter private final boolean streaming; // indicates writer can process & output records incrementally
     private final Function<RecordWriterConfig,IRecordWriter> factory;
-    public IRecordWriter createWriter(RecordWriterConfig config) {
-        return factory.apply(config);
-    }
+    public IRecordWriter createWriter(RecordWriterConfig config) { return factory.apply(config); }
 }

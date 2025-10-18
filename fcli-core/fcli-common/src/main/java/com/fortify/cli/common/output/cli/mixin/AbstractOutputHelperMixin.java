@@ -22,6 +22,15 @@ public abstract class AbstractOutputHelperMixin implements IOutputHelper {
         getOutputWriterFactory().createOutputWriter(getBasicOutputConfig()).write(objectNodeProducer);
     }
 
+    /** Indicates whether selected output format supports streaming (table returns false). */
+    public boolean isStreamingOutputSupported() {
+        if ( getOutputWriterFactory() instanceof StandardOutputWriterFactoryMixin sowfm ) {
+            var selected = sowfm.getSelectedRecordWriterFactory(getBasicOutputConfig());
+            return selected.isStreaming();
+        }
+        return getBasicOutputConfig().defaultFormat().isStreaming();
+    }
+
     protected abstract StandardOutputConfig getBasicOutputConfig();
 
     protected abstract IOutputWriterFactory getOutputWriterFactory();
