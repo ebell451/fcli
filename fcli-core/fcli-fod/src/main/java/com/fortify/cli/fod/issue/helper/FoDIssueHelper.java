@@ -20,10 +20,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,29 +27,73 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.json.JsonHelper;
 import com.fortify.cli.common.json.transform.fields.RenameFieldsTransformer;
-import com.fortify.cli.common.rest.unirest.UnexpectedHttpResponseException;
 import com.fortify.cli.fod._common.rest.FoDUrls;
-import com.fortify.cli.fod._common.rest.embed.IFoDEntityEmbedder;
-import com.fortify.cli.fod._common.rest.helper.FoDInputTransformer;
-import com.fortify.cli.fod._common.rest.helper.FoDPagingHelper;
 import com.fortify.cli.fod._common.rest.helper.FoDProductHelper;
-import com.fortify.cli.fod.issue.cli.mixin.FoDIssueEmbedMixin;
-import com.fortify.cli.fod.issue.cli.mixin.FoDIssueIncludeMixin;
-import com.fortify.cli.fod.release.helper.FoDReleaseDescriptor;
-import com.fortify.cli.fod.release.helper.FoDReleaseHelper;
 
-import io.micrometer.common.util.StringUtils;
-import kong.unirest.HttpRequest;
-import kong.unirest.HttpResponse;
 import kong.unirest.UnirestInstance;
+import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 
 public class FoDIssueHelper {
-    private static final Log LOG = LogFactory.getLog(FoDIssueHelper.class);
     @Getter private static ObjectMapper objectMapper = new ObjectMapper();
 
     public static final JsonNode transformRecord(JsonNode record) {
         return new RenameFieldsTransformer(new String[]{}).transform(record);
+    }
+
+    /** Immutable aggregation data carrier for adding merged issue fields. */
+    @Data @Builder
+    public static class IssueAggregationData {
+        private final Set<String> releaseNames;
+        private final Set<String> releaseIds;
+        private final Set<String> ids; // issue ids across releases
+        private final Set<String> vulnIds; // may be empty
+
+        private final String releaseNamesString;
+        private final String releaseIdsString;
+        private final String idsString; // sorted numeric ascending for consistency
+        private final String vulnIdsString;
+
+        /** Factory for single-release records; extracts properties from issue node. */
+        public static IssueAggregationData forSingleRelease(ObjectNode issue) {
+            String releaseId = issue.get("releaseId").asText();
+            String releaseName = issue.get("releaseName").asText();
+            String id = issue.get("id").asText();
+            String vulnId = issue.has("vulnId") ? issue.get("vulnId").asText() : null;
+            return IssueAggregationData.builder()
+                .releaseNames(Set.of(releaseName))
+                .releaseIds(Set.of(releaseId))
+                .ids(Set.of(id))
+                .vulnIds(Set.of(vulnId))
+                .releaseNamesString(releaseName)
+                .releaseIdsString(releaseId)
+                .idsString(id)
+                .vulnIdsString(vulnId)
+                .build();
+        }
+    }
+
+    /** Overload adding aggregation fields to an ObjectNode using provided data. */
+    public static final ObjectNode transformRecord(ObjectNode record, IssueAggregationData data) {
+        transformRecord(record); // apply generic transformations first (rename etc.)
+        ArrayNode vulnIdsArray = JsonHelper.getObjectMapper().createArrayNode();
+        data.getVulnIds().forEach(vulnIdsArray::add);
+        ArrayNode releaseNamesArray = JsonHelper.getObjectMapper().createArrayNode();
+        data.getReleaseNames().forEach(releaseNamesArray::add);
+        ArrayNode releaseIdsArray = JsonHelper.getObjectMapper().createArrayNode();
+        data.getReleaseIds().forEach(releaseIdsArray::add);
+        ArrayNode idsArray = JsonHelper.getObjectMapper().createArrayNode();
+        data.getIds().forEach(idsArray::add);
+        record.set("vulnIds", vulnIdsArray);
+        record.put("vulnIdsString", data.getVulnIdsString());
+        record.set("foundInReleases", releaseNamesArray);
+        record.put("foundInReleasesString", data.getReleaseNamesString());
+        record.set("foundInReleaseIds", releaseIdsArray);
+        record.put("foundInReleaseIdsString", data.getReleaseIdsString());
+        record.set("ids", idsArray);
+        record.put("idsString", data.getIdsString());
+        return record;
     }
 
     public static final FoDBulkIssueUpdateResponse updateIssues(UnirestInstance unirest, String releaseId, FoDBulkIssueUpdateRequest issueUpdateRequest) {
@@ -64,69 +104,6 @@ public class FoDIssueHelper {
         return getResponse(result);
     }
 
-    public static final ArrayNode getReleaseIssues(UnirestInstance unirest,
-                                                String releaseId,
-                                                FoDIssueIncludeMixin includeMixin,
-                                                FoDIssueEmbedMixin embedMixin,
-                                                String filtersParamValue,
-                                                boolean failOnError) {
-        LOG.debug("Retrieving issues for release id: " + releaseId);
-        FoDReleaseDescriptor releaseDescriptor = FoDReleaseHelper.getReleaseDescriptorFromId(unirest,
-                Integer.parseInt(releaseId), true );
-        String releaseName = releaseDescriptor.getReleaseName();
-        ArrayNode result = JsonHelper.getObjectMapper().createArrayNode();
-        Map<String, Object> queryParams = new HashMap<>();
-        // Add filters parameter if specified
-        if (StringUtils.isNotEmpty(filtersParamValue)) {
-            queryParams.put("filters", filtersParamValue);
-        }
-        // Always order by severity ascending
-        queryParams.put("orderBy", "severity");
-        queryParams.put("orderDirection", "ASC");
-        // Retrieve all issues for the specified release
-        try {
-            HttpRequest<?> request = unirest.get(FoDUrls.VULNERABILITIES)
-                    .routeParam("relId", releaseId)
-                    .queryString(queryParams);
-            if (includeMixin != null) {
-                request = includeMixin.updateRequest(request);
-            }
-            List<JsonNode> results = FoDPagingHelper.pagedRequest(request)
-                    .stream()
-                    .map(HttpResponse::getBody)
-                    .map(FoDInputTransformer::getItems)
-                    .map(ArrayNode.class::cast)
-                    .flatMap(JsonHelper::stream)
-                    .collect(Collectors.toList());
-            // Transform and enhance each issue record
-            for (JsonNode record : results) {
-                if (record instanceof ObjectNode) {
-                    transformRecord(record);
-                    // add releaseName as only releaseId is returned in issue records
-                    ((ObjectNode) record).put("releaseName", releaseName);
-                    // add issueUrl for convenience
-                    ((ObjectNode) record).put("issueUrl", getIssueUrl(unirest, record.get("id").asText()));
-                    // embed additional entities if requested
-                    if (embedMixin != null && embedMixin.getEmbedSuppliers() != null) {
-                        for (FoDIssueEmbedMixin.FoDIssueEmbedderSupplier supplier : embedMixin.getEmbedSuppliers()) {
-                            IFoDEntityEmbedder embedder = supplier.createEntityEmbedder();
-                            embedder.embed(unirest, (ObjectNode) record);
-                        }
-                    }
-                }
-                result.add(record);
-            }
-            return result;
-        } catch (UnexpectedHttpResponseException e) {
-            if (failOnError) {
-                throw e;
-            }
-            LOG.error("Error retrieving issues for release " +
-                    (StringUtils.isNotEmpty(releaseId) ? releaseId : "<null>") +
-                    ": " + e.getMessage());
-            return JsonHelper.getObjectMapper().createArrayNode();
-        }
-    }
 
     public static final ArrayNode mergeReleaseIssues(ArrayNode issues) {
         Map<String, ObjectNode> merged = new HashMap<>();
@@ -135,14 +112,13 @@ public class FoDIssueHelper {
         Map<String, Set<String>> idsByInstance = new HashMap<>();
         Map<String, Set<String>> vulnIdsByInstance = new HashMap<>();
 
-        // Combine releaseId, releaseName, id, and vulnId fields for issues with the same instanceId
         for (JsonNode record : issues) {
-            if (record instanceof ObjectNode) {
-                String instanceId = record.get("instanceId").asText();
-                String releaseNameVal = record.get("releaseName").asText();
-                String releaseIdVal = record.get("releaseId").asText();
-                String idVal = record.get("id").asText();
-                String vulnIdVal = record.has("vulnId") ? record.get("vulnId").asText() : "";
+            if (record instanceof ObjectNode objectNode) {
+                String instanceId = objectNode.get("instanceId").asText();
+                String releaseNameVal = objectNode.get("releaseName").asText();
+                String releaseIdVal = objectNode.get("releaseId").asText();
+                String idVal = objectNode.get("id").asText();
+                String vulnIdVal = objectNode.has("vulnId") ? objectNode.get("vulnId").asText() : "";
 
                 releaseNamesByInstance.computeIfAbsent(instanceId, k -> new HashSet<>()).add(releaseNameVal);
                 releaseIdsByInstance.computeIfAbsent(instanceId, k -> new HashSet<>()).add(releaseIdVal);
@@ -151,11 +127,10 @@ public class FoDIssueHelper {
                     vulnIdsByInstance.computeIfAbsent(instanceId, k -> new HashSet<>()).add(vulnIdVal);
                 }
 
-                merged.putIfAbsent(instanceId, (ObjectNode) record.deepCopy());
+                merged.putIfAbsent(instanceId, (ObjectNode) objectNode.deepCopy());
             }
         }
 
-        // Sort merged records by severity, then category, then releaseId
         List<ObjectNode> sortedRecords = new ArrayList<>(merged.values());
         sortedRecords.sort(
                 Comparator.comparingInt((ObjectNode n) -> n.get("severity").asInt()).reversed()
@@ -163,34 +138,24 @@ public class FoDIssueHelper {
                         .thenComparing(n -> n.get("releaseId").asInt())
         );
 
-        // Add combined fields to each record
         ArrayNode result = JsonHelper.getObjectMapper().createArrayNode();
         for (ObjectNode record : sortedRecords) {
             String instanceId = record.get("instanceId").asText();
             Set<String> releaseNames = releaseNamesByInstance.get(instanceId);
             Set<String> releaseIds = releaseIdsByInstance.get(instanceId);
-            Set<String> relatedIds = idsByInstance.get(instanceId);
+            Set<String> issueIds = idsByInstance.get(instanceId);
             Set<String> vulnIds = vulnIdsByInstance.getOrDefault(instanceId, Collections.emptySet());
-            ArrayNode vulnIdsArray = JsonHelper.getObjectMapper().createArrayNode();
-            vulnIds.forEach(vulnIdsArray::add);
-            ArrayNode releaseNamesArray = JsonHelper.getObjectMapper().createArrayNode();
-            releaseNames.forEach(releaseNamesArray::add);
-            ArrayNode releaseIdsArray = JsonHelper.getObjectMapper().createArrayNode();
-            releaseIds.forEach(releaseIdsArray::add);
-            ArrayNode idsArray = JsonHelper.getObjectMapper().createArrayNode();
-            relatedIds.forEach(idsArray::add);
-            record.set("vulnIds", vulnIdsArray);
-            record.put("vulnIdsString", String.join(", ", vulnIds));
-            record.set("foundInReleases", releaseNamesArray);
-            record.put("foundInReleasesString", String.join(", ", releaseNames));
-            record.set("foundInReleaseIds", releaseIdsArray);
-            record.put("foundInReleaseIdsString", String.join(", ", releaseIds));
-            record.set("ids", idsArray);
-            record.put("idsString", relatedIds.stream()
-                    .map(Integer::parseInt)
-                    .sorted()
-                    .map(String::valueOf)
-                    .collect(Collectors.joining(", ")));
+            var data = IssueAggregationData.builder()
+                    .releaseNames(releaseNames)
+                    .releaseIds(releaseIds)
+                    .ids(issueIds)
+                    .vulnIds(vulnIds)
+                    .releaseNamesString(String.join(", ", releaseNames))
+                    .releaseIdsString(String.join(", ", releaseIds))
+                    .idsString(String.join(", ", issueIds))
+                    .vulnIdsString(String.join(", ", vulnIds))
+                    .build();
+            transformRecord(record, data);
             result.add(record);
         }
         return result;

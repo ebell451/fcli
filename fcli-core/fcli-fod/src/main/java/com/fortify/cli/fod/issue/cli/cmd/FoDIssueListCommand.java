@@ -12,41 +12,50 @@
  */
 package com.fortify.cli.fod.issue.cli.cmd;
 
-import java.util.List;
-import java.util.Optional;
+// Removed unused logging imports
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.exception.FcliSimpleException;
 import com.fortify.cli.common.json.JsonHelper;
+import com.fortify.cli.common.json.producer.EmptyObjectNodeProducer;
+import com.fortify.cli.common.json.producer.IObjectNodeProducer;
+import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamGeneratorSupplier;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamValueGenerator;
+import com.fortify.cli.common.util.Break;
 import com.fortify.cli.fod._common.cli.mixin.FoDDelimiterMixin;
-import com.fortify.cli.fod._common.output.cli.cmd.AbstractFoDJsonNodeOutputCommand;
+import com.fortify.cli.fod._common.output.cli.cmd.AbstractFoDOutputCommand;
+import com.fortify.cli.fod._common.rest.FoDUrls;
 import com.fortify.cli.fod._common.rest.query.FoDFiltersParamGenerator;
 import com.fortify.cli.fod._common.rest.query.cli.mixin.FoDFiltersParamMixin;
 import com.fortify.cli.fod.app.cli.mixin.FoDAppResolverMixin;
 import com.fortify.cli.fod.issue.cli.mixin.FoDIssueEmbedMixin;
 import com.fortify.cli.fod.issue.cli.mixin.FoDIssueIncludeMixin;
 import com.fortify.cli.fod.issue.helper.FoDIssueHelper;
+import com.fortify.cli.fod.issue.helper.FoDIssueHelper.IssueAggregationData;
 import com.fortify.cli.fod.release.cli.mixin.FoDReleaseByQualifiedNameOrIdResolverMixin;
+import com.fortify.cli.fod.release.helper.FoDReleaseDescriptor;
 import com.fortify.cli.fod.release.helper.FoDReleaseHelper;
 
+import kong.unirest.HttpRequest;
 import kong.unirest.UnirestInstance;
 import lombok.Getter;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 
 @Command(name = OutputHelperMixins.List.CMD_NAME)
-public class FoDIssueListCommand extends AbstractFoDJsonNodeOutputCommand implements IServerSideQueryParamGeneratorSupplier {
-    private static final Log LOG = LogFactory.getLog(FoDIssueListCommand.class);
+public class FoDIssueListCommand extends AbstractFoDOutputCommand implements IServerSideQueryParamGeneratorSupplier {
 
     @Getter @Mixin private OutputHelperMixins.List outputHelper;
-    @Mixin private FoDDelimiterMixin delimiterMixin; // Is automatically injected in resolver mixins
+    @Mixin private FoDDelimiterMixin delimiterMixin; // injected in resolvers
     @Mixin private FoDAppResolverMixin.OptionalOption appResolver;
     @Mixin private FoDReleaseByQualifiedNameOrIdResolverMixin.OptionalOption releaseResolver;
     @Mixin private FoDFiltersParamMixin filterParamMixin;
@@ -65,50 +74,116 @@ public class FoDIssueListCommand extends AbstractFoDJsonNodeOutputCommand implem
             .add("category","category");
 
     @Override
-    public JsonNode getJsonNode(UnirestInstance unirest) {
-        ArrayNode result = JsonHelper.getObjectMapper().createArrayNode();
-        // Get any server-side filters
-        String filtersParamValue = Optional.ofNullable(filterParamMixin.getFilterExpression())
-                .map(serverSideQueryParamGenerator::getServerSideQueryParamValue)
-                .filter(v -> !v.isEmpty())
-                .orElse(Optional.ofNullable(filterParamMixin.getServerSideQueryParamOptionValue()).orElse(""));
-        // If a release is specified, just get issues for that release
-        if (releaseResolver.getQualifiedReleaseNameOrId() != null) {
-            if (appResolver.getAppNameOrId() != null) {
-                throw new FcliSimpleException("Cannot specify both an application and release");
-            }
-            // If a release is specified, just get issues for that release
-            result.addAll(FoDIssueHelper.getReleaseIssues(unirest, releaseResolver.getReleaseId(unirest),
-                    includeMixin,
-                    embedMixin,
-                    filtersParamValue,
-                    true));
-            // call mergeReleaseIssues to ensure consistent ordering and deduplication of issues
-            return FoDIssueHelper.mergeReleaseIssues(result);
+    protected IObjectNodeProducer getObjectNodeProducer(UnirestInstance unirest) {
+        boolean releaseSpecified = releaseResolver.getQualifiedReleaseNameOrId() != null;
+        boolean appSpecified = appResolver.getAppNameOrId() != null;
+        if ( releaseSpecified && appSpecified ) {
+            throw new FcliSimpleException("Cannot specify both an application and release");
         }
-        // If an application is specified, get issues for all releases of that application
-        if (appResolver.getAppNameOrId() != null) {
-            // If an application is specified, get issues for all releases of that application
-            List<String> releases = FoDReleaseHelper.getAllReleaseIdsForApp(unirest, appResolver.getAppId(unirest), true);
-            if (releases.isEmpty()) {
-                throw new FcliSimpleException("No releases found for application " + appResolver.getAppNameOrId());
-            }
-            for (String release : releases) {
-                result.addAll(FoDIssueHelper.getReleaseIssues(unirest, release,
-                        includeMixin,
-                        embedMixin,
-                        filtersParamValue,
-                        true));
-            }
-            // call mergeReleaseIssues to ensure consistent ordering
-            return FoDIssueHelper.mergeReleaseIssues(result);
-        } else {
+        if ( !releaseSpecified && !appSpecified ) {
             throw new FcliSimpleException("Either an application or release must be specified");
         }
+        return releaseSpecified
+                ? buildSingleReleaseProducer(unirest, releaseResolver.getReleaseId(unirest))
+                : buildApplicationProducer(unirest, appResolver.getAppId(unirest));
+    }
+
+    /**
+     * Build a streaming producer for a single release. Uses requestObjectNodeProducerBuilder(SPEC)
+     * to benefit from paging & transformations; server-side filtering is applied via
+     * {@link FoDFiltersParamMixin} acting as an {@code IHttpRequestUpdater} when the builder applies SPEC.
+     *
+     * Enrichments added per record:
+     * <ul>
+     *   <li>releaseName (looked up once)</li>
+     *   <li>issueUrl (browser convenience)</li>
+     *   <li>Embed data if --embed specified</li>
+     * </ul>
+     * Record transformations from SPEC (query filtering etc) still apply after enrichment.
+     *
+     * @param unirest FoD REST client
+     * @param releaseId Selected release id
+     * @return Producer streaming transformed issue records for the release
+     */
+    private IObjectNodeProducer buildSingleReleaseProducer(UnirestInstance unirest, String releaseId) {
+        return buildReleaseIssuesProducer(unirest, releaseId);
+    }
+
+    /**
+     * Build a producer that lists merged issues across all releases for an application. We aggregate
+     * issues per release first (reusing existing helper logic), then perform merge & stream results.
+     * Streaming begins once all releases have been processed (merging requires full set).
+     *
+     * The merge operation combines issues with identical instanceId across releases, adding fields:
+     * vulnIds|vulnIdsString, foundInReleases|foundInReleasesString, foundInReleaseIds|foundInReleaseIdsString,
+     * ids|idsString. Ordering is applied by helper (severity desc, category, releaseId).
+     *
+     * NOTE: We currently need all issues loaded before streaming because merge logic correlates
+     * across releases. Future optimization could stream partially if helper supports incremental merging.
+     *
+     * Server-side filters are computed per release using the same logic as the single-release path,
+     * but we must pass the resulting string explicitly to {@link FoDIssueHelper#getReleaseIssues}.
+     *
+     * @param unirest FoD REST client
+     * @param appId Application identifier
+     * @return Producer streaming merged issue records (empty if no releases)
+     */
+    private IObjectNodeProducer buildApplicationProducer(UnirestInstance unirest, String appId) {
+        List<String> releaseIds = loadReleaseIdsForApp(unirest, appId);
+        if ( releaseIds.isEmpty() ) { return EmptyObjectNodeProducer.INSTANCE; }
+        ArrayNode aggregated = JsonHelper.getObjectMapper().createArrayNode();
+        for ( String releaseId : releaseIds ) {
+            buildReleaseIssuesProducer(unirest, releaseId)
+                .forEach(node -> { aggregated.add(node); return Break.FALSE; });
+        }
+        Supplier<Stream<ObjectNode>> streamSupplier = () -> JsonHelper.stream(FoDIssueHelper.mergeReleaseIssues(aggregated))
+                .filter(n -> n instanceof ObjectNode)
+                .map(n -> (ObjectNode)n);
+        return streamingObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .streamSupplier(streamSupplier)
+                .build();
+    }
+
+    /** Load release ids for given application using requestObjectNodeProducerBuilder(PRODUCT) for paging/product transformations. */
+    private List<String> loadReleaseIdsForApp(UnirestInstance unirest, String appId) {
+        List<String> releaseIds = new ArrayList<>();
+        var producer = requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.PRODUCT)
+                .baseRequest(unirest.get(FoDUrls.RELEASES).queryString("filters", "applicationId:"+appId))
+                .build();
+        producer.forEach(node -> {
+            if ( node.has("releaseId") ) {
+                releaseIds.add(node.get("releaseId").asText());
+            }
+            return Break.FALSE; // continue
+        });
+        return releaseIds;
     }
 
     @Override
-    public boolean isSingular() {
-        return false;
+    public boolean isSingular() { return false; }
+
+    // Shared per-release issues producer builder
+    private IObjectNodeProducer buildReleaseIssuesProducer(UnirestInstance unirest, String releaseId) {
+        FoDReleaseDescriptor releaseDescriptor = FoDReleaseHelper.getReleaseDescriptorFromId(unirest, Integer.parseInt(releaseId), true);
+        String releaseName = releaseDescriptor.getReleaseName();
+        HttpRequest<?> request = unirest.get(FoDUrls.VULNERABILITIES)
+                .routeParam("relId", releaseId)
+                .queryString("limit", "10")
+                .queryString("orderBy", "severity")
+                .queryString("orderDirection", "ASC");
+        return requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .baseRequest(request)
+                .recordTransformer(n -> enrichIssueRecord(unirest, releaseName, n))
+                .build();
+    }
+
+    private JsonNode enrichIssueRecord(UnirestInstance unirest, String releaseName, com.fasterxml.jackson.databind.JsonNode n) {
+        if ( n instanceof ObjectNode node ) {
+            node.put("releaseName", releaseName);
+            node.put("issueUrl", FoDIssueHelper.getIssueUrl(unirest, node.get("id").asText()));
+            IssueAggregationData data = IssueAggregationData.forSingleRelease(node);
+            FoDIssueHelper.transformRecord(node, data);
+        }
+        return n;
     }
 }
