@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.cli.cmd.AbstractRunnableCommand;
 import com.fortify.cli.common.exception.FcliBugException;
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
+import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
 import com.fortify.cli.common.json.producer.RequestObjectNodeProducer;
 import com.fortify.cli.common.json.producer.RequestObjectNodeProducer.RequestObjectNodeProducerBuilder;
 import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer;
@@ -71,47 +72,49 @@ public abstract class AbstractOutputCommand extends AbstractRunnableCommand
     }
 
     private IObjectNodeProducer buildJsonNodeProducer(JsonNode node) {
-        return simpleObjectNodeProducerBuilder(true).source(node).build();
+        return simpleObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .source(node).build();
     }
 
     private IObjectNodeProducer buildRequestProducer(HttpRequest<?> baseRequest) {
-        return requestObjectNodeProducerBuilder(true).baseRequest(baseRequest).build();
+        return requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .baseRequest(baseRequest).build();
     }
 
     /**
-     * Convenience method to create and configure a {@link SimpleObjectNodeProducer.SimpleObjectNodeProducerBuilder}.
-     * This sets the {@code commandHelper}, and if {@code applyFromSpec} is true, {@link SimpleObjectNodeProducer.SimpleObjectNodeProducerBuilder#applyAllFromSpec()} is invoked.
-     * @param applyAllFromSpec Whether to invoke {@code applyFromSpec()} on the builder
+    * Convenience method to create and configure a {@link SimpleObjectNodeProducer.SimpleObjectNodeProducerBuilder}.
+    * This sets the {@code commandHelper}, then invokes {@link SimpleObjectNodeProducer.SimpleObjectNodeProducerBuilder#applyAllFrom(com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom)}.
+     * @param applyFrom Enum indicating what sources to apply (SPEC, PRODUCT, NONE)
      * @return Partially configured builder instance
      */
-    protected final SimpleObjectNodeProducerBuilder<?, ?> simpleObjectNodeProducerBuilder(boolean applyAllFromSpec) {
-        var b = SimpleObjectNodeProducer.builder().commandHelper(getCommandHelper());
-        if ( applyAllFromSpec ) { b.applyAllFromSpec(); }
-        return b;
+    protected final SimpleObjectNodeProducerBuilder<?, ?> simpleObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom applyFrom) {
+        return SimpleObjectNodeProducer.builder()
+                .commandHelper(getCommandHelper())
+                .applyAllFrom(applyFrom);
     }
 
     /**
-     * Convenience method to create and configure a {@link RequestObjectNodeProducer.RequestObjectNodeProducerBuilder}.
-     * This sets the {@code commandHelper}, and if {@code applyFromSpec} is true, {@link RequestObjectNodeProducer.RequestObjectNodeProducerBuilder#applyAllFromSpec()} is invoked.
-     * @param applyAllFromSpec Whether to invoke {@code applyFromSpec()} on the builder
+    * Convenience method to create and configure a {@link RequestObjectNodeProducer.RequestObjectNodeProducerBuilder}.
+    * This sets the {@code commandHelper}, then invokes {@link RequestObjectNodeProducer.RequestObjectNodeProducerBuilder#applyAllFrom(com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom)}.
+     * @param applyFrom Enum indicating what sources to apply (SPEC, PRODUCT, NONE)
      * @return Partially configured builder instance
      */
-    protected final RequestObjectNodeProducerBuilder<?, ?> requestObjectNodeProducerBuilder(boolean applyAllFromSpec) {
-        var b = RequestObjectNodeProducer.builder().commandHelper(getCommandHelper());
-        if ( applyAllFromSpec ) { b.applyAllFromSpec(); }
-        return b;
+    protected final RequestObjectNodeProducerBuilder<?, ?> requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom applyFrom) {
+        return RequestObjectNodeProducer.builder()
+                .commandHelper(getCommandHelper())
+                .applyAllFrom(applyFrom);
     }
     
     /**
-     * Convenience method to create and configure a {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder}.
-     * This sets the {@code commandHelper}, and if {@code applyFromSpec} is true, {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder#applyAllFromSpec()} is invoked.
-     * @param applyAllFromSpec Whether to invoke {@code applyFromSpec()} on the builder
+    * Convenience method to create and configure a {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder}.
+    * This sets the {@code commandHelper}, then invokes {@link StreamingObjectNodeProducer.StreamingObjectNodeProducerBuilder#applyAllFrom(com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom)}.
+     * @param applyFrom Enum indicating what sources to apply (SPEC, PRODUCT, NONE)
      * @return Partially configured builder instance
      */
-    protected final StreamingObjectNodeProducerBuilder<?, ?> streamingObjectNodeProducerBuilder(boolean applyAllFromSpec) {
-        var b = StreamingObjectNodeProducer.builder().commandHelper(getCommandHelper());
-        if ( applyAllFromSpec ) { b.applyAllFromSpec(); }
-        return b;
+    protected final StreamingObjectNodeProducerBuilder<?, ?> streamingObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom applyFrom) {
+        return StreamingObjectNodeProducer.builder()
+                .commandHelper(getCommandHelper())
+                .applyAllFrom(applyFrom);
     }
 
     public abstract IOutputHelper getOutputHelper();

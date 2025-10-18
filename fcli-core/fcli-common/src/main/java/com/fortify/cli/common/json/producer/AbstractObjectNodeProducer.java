@@ -15,7 +15,6 @@ package com.fortify.cli.common.json.producer;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.UnaryOperator;
-import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -25,14 +24,13 @@ import com.fortify.cli.common.cli.util.FcliCommandSpecHelper;
 import com.fortify.cli.common.exception.FcliBugException;
 import com.fortify.cli.common.json.transform.fields.AddFieldsTransformer;
 import com.fortify.cli.common.output.product.IProductHelper;
-import com.fortify.cli.common.output.product.IProductHelperSupplier;
-import com.fortify.cli.common.output.product.NoOpProductHelper;
 import com.fortify.cli.common.output.transform.IActionCommandResultSupplier;
 import com.fortify.cli.common.output.transform.IInputTransformer;
 import com.fortify.cli.common.output.transform.IRecordTransformer;
 import com.fortify.cli.common.spel.query.QueryExpression;
 import com.fortify.cli.common.util.Break;
 
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
@@ -102,56 +100,67 @@ public abstract class AbstractObjectNodeProducer implements IObjectNodeProducer 
 
     // Convenience builder customizations ------------------------------------------------------
     public abstract static class AbstractObjectNodeProducerBuilder<C extends AbstractObjectNodeProducer, B extends AbstractObjectNodeProducerBuilder<C,B>> {
-        private IProductHelper productHelper;
+        @Getter(AccessLevel.PROTECTED) private IProductHelper explicitProductHelper;
         private ICommandHelper commandHelper;
-        public B productHelper(IProductHelper productHelper) { this.productHelper = productHelper; return self(); }
+        /**
+         * Configure an explicit {@link IProductHelper} instance to use when applying
+         * {@link ObjectNodeProducerApplyFrom#PRODUCT} or {@link ObjectNodeProducerApplyFrom#SPEC}.
+         * <p>
+         * If set, this overrides implicit resolution through {@code ICommandHelper#getCommandAs(IProductHelperSupplier)}.
+         * This allows callers (like commands building producers for cross-product operations) to inject
+         * a product-specific helper even if the current command doesn't implement {@link com.fortify.cli.common.output.product.IProductHelperSupplier}.
+         * <p>
+         * Precedence:
+         * <ol>
+         *   <li>If an explicit product helper is configured via this method, it is always used.</li>
+         *   <li>Otherwise the enum logic attempts to resolve a helper from the command (falling back to {@link com.fortify.cli.common.output.product.NoOpProductHelper}).</li>
+         * </ol>
+         * Typical usage pattern:
+         * <pre>{@code
+         * SimpleObjectNodeProducer.builder()
+         *     .commandHelper(ch)
+         *     .productHelper(customHelper) // optional
+         *     .applyAllFrom(ObjectNodeProducerApplyFrom.SPEC)
+         *     .build();
+         * }</pre>
+         * @param productHelper Explicit product helper instance; may be null to allow implicit resolution.
+         * @return This builder instance for fluent chaining.
+         */
+        public B productHelper(IProductHelper productHelper) { this.explicitProductHelper = productHelper; return self(); }
         public B commandHelper(ICommandHelper commandHelper) { this.commandHelper = commandHelper; return self(); }
         
-        // --- Spec application API ---
-        public B applyAllFromSpec() { 
-            getRequiredCommandHelper(); // ensure configured
-            // Initialize productHelper lazily through getProductHelper(); no direct assignment needed here
-            applyInputTransformationsFromSpec();
-            applyRecordTransformationsFromSpec();
-            applyQueryFromSpec();
-            applyActionCommandResultSupplierFromSpec();
+        public B applyAllFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            if ( applyFrom==null || applyFrom==ObjectNodeProducerApplyFrom.NONE ) { return self(); }
+            getRequiredCommandHelper(); // ensure configured for SPEC or PRODUCT
+            applyInputTransformationsFrom(applyFrom);
+            applyRecordTransformationsFrom(applyFrom);
+            applyQueryFrom(applyFrom);
+            applyActionCommandResultSupplierFrom(applyFrom);
             return self();
         }
-        private void applyActionCommandResultSupplierFromSpec() {
-            if ( getRequiredCommandHelper().getCommand() instanceof IActionCommandResultSupplier s ) {
+        private void applyActionCommandResultSupplierFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            if ( applyFrom!=ObjectNodeProducerApplyFrom.NONE && getRequiredCommandHelper().getCommand() instanceof IActionCommandResultSupplier s ) {
                 recordTransformer(n -> new AddFieldsTransformer(IActionCommandResultSupplier.actionFieldName, s.getActionCommandResult()).transform(n));
             }
         }
-        public B applyInputTransformationsFromSpec() {
-            getAllUserObjectsStream().forEach(this::addInputTransformersFromObject);
+        public B applyInputTransformationsFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            applyFrom.getSourceStream(getRequiredCommandHelper(), explicitProductHelper).forEach(this::addInputTransformersFromObject);
             return self();
         }
-        public B applyRecordTransformationsFromSpec() {
-            getAllUserObjectsStream().forEach(this::addRecordTransformersFromObject);
+        public B applyRecordTransformationsFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            applyFrom.getSourceStream(getRequiredCommandHelper(), explicitProductHelper).forEach(this::addRecordTransformersFromObject);
             return self();
         }
-        public B applyQueryFromSpec() {
-            var spec = getRequiredCommandSpec();
-            if ( this.queryExpression==null ) { FcliCommandSpecHelper.getQueryExpression(spec).ifPresent(qe -> this.queryExpression = qe); }
+        public B applyQueryFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            if ( applyFrom==ObjectNodeProducerApplyFrom.SPEC ) { // Only SPEC provides query expression from spec
+                var spec = getRequiredCommandSpec();
+                if ( this.queryExpression==null ) { FcliCommandSpecHelper.getQueryExpression(spec).ifPresent(qe -> this.queryExpression = qe); }
+            }
             return self();
-        }
-        private IProductHelper getProductHelper() {
-            return productHelper!=null 
-                    ? productHelper
-                    : getRequiredCommandHelper().getCommandAs(IProductHelperSupplier.class)
-                        .map(IProductHelperSupplier::getProductHelper)
-                        .orElse(NoOpProductHelper.instance());
-        }
-        protected Stream<Object> getAllUserObjectsStream() {
-            var spec = getRequiredCommandSpec();
-            return Stream.concat(
-                        Stream.of(getProductHelper()),
-                        FcliCommandSpecHelper.getAllUserObjectsStream(spec))
-                    .filter(Objects::nonNull);
         }
         protected ICommandHelper getRequiredCommandHelper() {
             if ( commandHelper==null ) {
-                throw new FcliBugException("CommandHelper not configured; call commandHelper(<helper>) before applyFromSpec()");
+                throw new FcliBugException("CommandHelper not configured; call commandHelper(<helper>) before apply*From()");
             }
             return commandHelper;
         }

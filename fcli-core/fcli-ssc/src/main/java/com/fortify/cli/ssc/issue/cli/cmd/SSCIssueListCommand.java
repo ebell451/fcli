@@ -19,6 +19,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
+import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamGeneratorSupplier;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamValueGenerator;
@@ -62,7 +63,7 @@ public class SSCIssueListCommand extends AbstractSSCOutputCommand implements ISe
         String appVersionId = parentResolver.getAppVersionId(unirest);
         SSCIssueFilterSetDescriptor filterSetDescriptor = filterSetResolver.getFilterSetDescriptor(unirest, appVersionId);
         Map<String, String> folderNameByGuid = getFolderNameByGuid(filterSetDescriptor);
-        return requestObjectNodeProducerBuilder(true)
+    return requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
                 .baseRequest(getBaseRequest(unirest, appVersionId, filterSetDescriptor))
                 .recordTransformer(n -> addFolderName(n, folderNameByGuid))
                 .build();

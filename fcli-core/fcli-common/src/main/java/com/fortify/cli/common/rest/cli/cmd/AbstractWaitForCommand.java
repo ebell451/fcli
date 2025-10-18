@@ -13,6 +13,7 @@
 package com.fortify.cli.common.rest.cli.cmd;
 
 import com.fortify.cli.common.cli.cmd.AbstractRunnableCommand;
+import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
 import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.output.transform.IActionCommandResultSupplier;
@@ -54,11 +55,11 @@ public abstract class AbstractWaitForCommand extends AbstractRunnableCommand imp
                     .waitType(waitTypeSupplier.getWaitType())
                     .progressMonitor(progressMonitorMixin.create(false))
                     .onFinish(WaitHelper::recordsWithActionAsArrayNode, arrayNode -> {
-            var producer = SimpleObjectNodeProducer.builder().source(arrayNode)
-                .commandHelper(getCommandHelper())
-                .applyAllFromSpec()
-                .build();
-            outputHelper.write((com.fortify.cli.common.json.producer.IObjectNodeProducer)producer);
+                        var producer = SimpleObjectNodeProducer.builder().source(arrayNode)
+                            .commandHelper(getCommandHelper())
+                            .applyAllFrom(ObjectNodeProducerApplyFrom.SPEC)
+                            .build();
+                        outputHelper.write(producer);
                     })
             ).build().wait(unirest);
     }

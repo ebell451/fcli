@@ -62,19 +62,19 @@ public class RequestObjectNodeProducer extends AbstractObjectNodeProducer {
     }
 
     public static class RequestObjectNodeProducerBuilderImpl extends RequestObjectNodeProducerBuilder<RequestObjectNodeProducer, RequestObjectNodeProducerBuilderImpl> {
-        public RequestObjectNodeProducerBuilderImpl applyAllFromSpec() {
-            super.applyAllFromSpec();
-            applyRequestUpdatersFromSpec();
-            applyNextPageUrlProducerFromSpec();
+        public RequestObjectNodeProducerBuilderImpl applyAllFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            super.applyAllFrom(applyFrom);
+            applyRequestUpdatersFrom(applyFrom);
+            applyNextPageUrlProducerFrom(applyFrom);
             return self();
         }
 
-        private void applyNextPageUrlProducerFromSpec() {
-            getAllUserObjectsStream().forEach(this::addNextPageUrlProducerFromObject);
+        private void applyNextPageUrlProducerFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            applyFrom.getSourceStream(getRequiredCommandHelper(), getExplicitProductHelper()).forEach(this::addNextPageUrlProducerFromObject);
         }
 
-        public void applyRequestUpdatersFromSpec() {
-            getAllUserObjectsStream().forEach(this::addRequestUpdaterFromObject);
+        public void applyRequestUpdatersFrom(ObjectNodeProducerApplyFrom applyFrom) {
+            applyFrom.getSourceStream(getRequiredCommandHelper(), getExplicitProductHelper()).forEach(this::addRequestUpdaterFromObject);
         }
 
         private void addRequestUpdaterFromObject(Object o) {
