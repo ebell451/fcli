@@ -12,8 +12,6 @@
  */
 package com.fortify.cli.fod.issue.cli.cmd;
 
-// Removed unused logging imports
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -26,9 +24,10 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fortify.cli.common.exception.FcliSimpleException;
 import com.fortify.cli.common.json.JsonHelper;
-import com.fortify.cli.common.json.producer.EmptyObjectNodeProducer;
+import com.fortify.cli.common.json.producer.AbstractObjectNodeProducer.AbstractObjectNodeProducerBuilder;
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
+import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer;
 import com.fortify.cli.common.mcp.MCPDefaultValue;
 import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
@@ -89,11 +88,16 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
         if ( !releaseSpecified && !appSpecified ) {
             throw new FcliSimpleException("Either an application or release must be specified");
         }
-        return releaseSpecified
-                ? buildSingleReleaseProducer(unirest, releaseResolver.getReleaseId(unirest))
-                : buildApplicationProducer(unirest, appResolver.getAppId(unirest));
+        var result = releaseSpecified
+                ? singleReleaseProducerBuilder(unirest, releaseResolver.getReleaseId(unirest))
+                : applicationProducerBuilder(unirest, appResolver.getAppId(unirest));
+        // For consistent output, we should remove releaseId/releaseName when listing across multiple releases,
+        // but that breaks existing scripts that may rely on those fields, so for now, we only do this in
+        // applicationProducerBuilder(). TODO: Change in in fcli v4.0.
+        // return result.recordTransformer(this::removeReleaseProperties).build();
+        return result.build();
     }
-
+    
     /**
      * Build a streaming producer for a single release. Uses requestObjectNodeProducerBuilder(SPEC)
      * to benefit from paging & transformations; server-side filtering is applied via
@@ -111,8 +115,8 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
      * @param releaseId Selected release id
      * @return Producer streaming transformed issue records for the release
      */
-    private IObjectNodeProducer buildSingleReleaseProducer(UnirestInstance unirest, String releaseId) {
-        return buildReleaseIssuesProducer(unirest, releaseId);
+    private AbstractObjectNodeProducerBuilder<?,?> singleReleaseProducerBuilder(UnirestInstance unirest, String releaseId) {
+        return releaseIssuesProducerBuilder(unirest, releaseId);
     }
 
     /**
@@ -134,21 +138,22 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
      * @param appId Application identifier
      * @return Producer streaming merged issue records (empty if no releases)
      */
-    private IObjectNodeProducer buildApplicationProducer(UnirestInstance unirest, String appId) {
-        return isEffectiveFastOutput() 
-                ? buildFastApplicationProducer(unirest, appId) 
-                : buildMergedApplicationProducer(unirest, appId);
+    private AbstractObjectNodeProducerBuilder<?,?> applicationProducerBuilder(UnirestInstance unirest, String appId) {
+        var result = isEffectiveFastOutput() 
+                ? fastApplicationProducerBuilder(unirest, appId) 
+                : mergedApplicationProducerBuilder(unirest, appId);
+        return result.recordTransformer(this::removeReleaseProperties);
     }
 
     /** Fast streaming producer for application issues: sequentially streams issues from all releases without merging, de-duplicating on instanceId. */
-    private IObjectNodeProducer buildFastApplicationProducer(UnirestInstance unirest, String appId) {
+    private AbstractObjectNodeProducerBuilder<?,?> fastApplicationProducerBuilder(UnirestInstance unirest, String appId) {
         List<String> releaseIds = loadReleaseIdsForApp(unirest, appId);
-        if ( releaseIds.isEmpty() ) { return EmptyObjectNodeProducer.INSTANCE; }
+        if ( releaseIds.isEmpty() ) { return SimpleObjectNodeProducer.builder(); }
         Supplier<Stream<ObjectNode>> streamSupplier = () -> {
             Set<String> seenInstanceIds = new HashSet<>();
             return releaseIds.stream().flatMap(releaseId -> {
                 List<ObjectNode> list = new ArrayList<>();
-                buildReleaseIssuesProducer(unirest, releaseId).forEach(node -> {
+                releaseIssuesProducerBuilder(unirest, releaseId).build().forEach(node -> {
                     if ( node instanceof ObjectNode ) {
                         ObjectNode o = (ObjectNode)node;
                         String instanceId = o.has("instanceId") ? o.get("instanceId").asText() : null;
@@ -163,25 +168,20 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
             });
         };
         return streamingObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
-                .streamSupplier(streamSupplier)
-                .build();
+                .streamSupplier(streamSupplier);
     }
 
-    /** Existing merged application producer; loads all issues then performs merge. */
-    private IObjectNodeProducer buildMergedApplicationProducer(UnirestInstance unirest, String appId) {
+    /** Merged application producer; loads all issues then performs merge. */
+    private AbstractObjectNodeProducerBuilder<?,?> mergedApplicationProducerBuilder(UnirestInstance unirest, String appId) {
         List<String> releaseIds = loadReleaseIdsForApp(unirest, appId);
-        if ( releaseIds.isEmpty() ) { return EmptyObjectNodeProducer.INSTANCE; }
+        if ( releaseIds.isEmpty() ) { return SimpleObjectNodeProducer.builder(); }
         ArrayNode aggregated = JsonHelper.getObjectMapper().createArrayNode();
         for ( String releaseId : releaseIds ) {
-            buildReleaseIssuesProducer(unirest, releaseId)
+            releaseIssuesProducerBuilder(unirest, releaseId).build()
                 .forEach(node -> { aggregated.add(node); return Break.FALSE; });
         }
-        Supplier<Stream<ObjectNode>> streamSupplier = () -> JsonHelper.stream(FoDIssueHelper.mergeReleaseIssues(aggregated))
-                .filter(n -> n instanceof ObjectNode)
-                .map(n -> (ObjectNode)n);
-        return streamingObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
-                .streamSupplier(streamSupplier)
-                .build();
+        return simpleObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
+                .source(FoDIssueHelper.mergeReleaseIssues(aggregated));
     }
 
     /** Load release ids for given application using requestObjectNodeProducerBuilder(PRODUCT) for paging/product transformations. */
@@ -203,7 +203,7 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     public boolean isSingular() { return false; }
 
     // Shared per-release issues producer builder
-    private IObjectNodeProducer buildReleaseIssuesProducer(UnirestInstance unirest, String releaseId) {
+    private AbstractObjectNodeProducerBuilder<?,?> releaseIssuesProducerBuilder(UnirestInstance unirest, String releaseId) {
         FoDReleaseDescriptor releaseDescriptor = FoDReleaseHelper.getReleaseDescriptorFromId(unirest, Integer.parseInt(releaseId), true);
         String releaseName = releaseDescriptor.getReleaseName();
         HttpRequest<?> request = unirest.get(FoDUrls.VULNERABILITIES)
@@ -212,8 +212,7 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
                 .queryString("orderDirection", "ASC");
         return requestObjectNodeProducerBuilder(ObjectNodeProducerApplyFrom.SPEC)
                 .baseRequest(request)
-                .recordTransformer(n -> enrichIssueRecord(unirest, releaseName, n))
-                .build();
+                .recordTransformer(n -> enrichIssueRecord(unirest, releaseName, n));
     }
 
     private JsonNode enrichIssueRecord(UnirestInstance unirest, String releaseName, JsonNode n) {
@@ -236,5 +235,13 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
         boolean recordConsumerConfigured = getRecordConsumer()!=null;
         // Streaming supported by output format OR record consumer present (actions / MCP server)
         return (streamingSupported || recordConsumerConfigured);
+    }
+    
+    private final JsonNode removeReleaseProperties(JsonNode n) {
+        if ( n instanceof ObjectNode node ) {
+            node.remove("releaseId");
+            node.remove("releaseName");
+        }
+        return n;
     }
 }
