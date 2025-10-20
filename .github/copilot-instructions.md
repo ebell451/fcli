@@ -1,65 +1,94 @@
 # GitHub Copilot Instructions
 
-- Before running a Gradle build, 'cd' into project directory
-- After making any changes, please check for any warnings or errors introduced by those changes and fix if needed; first check using get_errors tool, once that no longer reports any errors, run full gradle build
-- Avoid duplication; if needed, refactor to allow for a more generic solution
-- Prefer imports over fully qualified  class names
-- Prefer short methods by splitting into multiple methods or utilizing modern Java features, optimize for human readibility
-- Prefer short methods; split if necessary
-- Utilize Java 17 features like Streams to minimize/optimize code
-- Don't add comments that describe changes, like 'New ...', 'Updated ...'. Comments should only be used to explain code if necessary
+## Project Overview
+Fcli is a modular CLI tool for interacting with Fortify products (FoD, SSC, ScanCentral SAST/DAST). Built with Java 17, Gradle, and Picocli for command structure.
+
+**Architecture:**
+- Multi-module Gradle project: `fcli-core/*` (product modules), `fcli-other/*` (supporting modules)
+- Module references defined in `gradle.properties` via `*Ref` properties (e.g., `fcliFoDRef=:fcli-core:fcli-fod`)
+- Commands: `AbstractContainerCommand` (groups), `AbstractRunnableCommand` (leaf commands implementing `Callable<Integer>`)
+- Output: Unified framework supporting JSON/CSV/XML/YAML/table via `IRecordWriter` implementations
+- Session management: Product-specific descriptors (e.g., `FoDSessionDescriptor`), cached `UnirestInstance` per session
+- Actions: YAML-based workflow automation with built-in library and custom import capability
+
+## Development Workflow
+- **Build:** `cd` to project root, run `./gradlew build` (don't run from subdirectories)
+- **Validation:** After edits, use `get_errors` tool first, then full Gradle build to catch warnings
+- **Testing:** Located in `src/test`; command structure validated in `FortifyCLITest`
+
+## Code Conventions
+- Target Java 17 features: records, text blocks, `var`, pattern matching for `instanceof`
+- Prefer explicit imports; avoid wildcards
+- Short methods (~20 lines max); extract helpers or use Streams for clarity
+- No change-tracking comments (e.g., "New ...", "Updated ..."); only explanatory comments when code is complex
   
+## Command Structure (Picocli-based)
+**Container commands** (`AbstractContainerCommand`): Group subcommands; only define help option.  
+**Leaf commands** (`AbstractRunnableCommand`): Implement `Callable<Integer>`; return 0 for success.
+
+**Mixins pattern:**  
+- Inject shared options/functionality via `@Mixin` (e.g., `OutputHelperMixins.List`, `UnirestInstanceSupplierMixin`)
+- Mixins implementing `ICommandAware` receive `CommandSpec` injection for accessing command metadata
+- `CommandHelperMixin`: Standard mixin providing access to `CommandSpec`, message resolver, root `CommandLine`
+
+**Session management:**  
+- Product modules extend `AbstractSessionLoginCommand`/`AbstractSessionLogoutCommand`
+- Sessions stored in fcli state directory; access via `*SessionHelper.instance().get(sessionName)`
+- UnirestInstance configured per session; managed by `*UnirestInstanceSupplierMixin` with automatic caching
+
+**Output handling:**  
+- Commands implement `IOutputConfigSupplier` to define default output format (table/json/csv/xml/yaml)
+- `StandardOutputWriter` drives output; delegates to `RecordWriterFactory` enum for format-specific writers
+- Data flow: `IObjectNodeProducer` → formatter/transformer → `IRecordWriter` → output stream
+
+**Actions framework:**  
+- YAML-defined workflows in `src/main/resources/.../actions/zip/` directories
+- Schema version tracked in `gradle.properties` (`fcliActionSchemaVersion`)
+- Steps like: `run.fcli` (execute fcli commands), `rest.call` (HTTP), `var.set` (variables), `for-each` (iteration)
+- Action commands extend `AbstractActionRunCommand`; parsed options passed to `ActionRunner`
+
+## Picocli Command Implementation Details
+- Most leaf commands should extend from `Abstract<product>OutputCommand` or (legacy) `Abstract<product>[JsonNode|Request]OutputCommand`. Command name and output helper are usually defined through `OutputHelperMixins` (or a product-specific variant).
+- Usage headers, command and option descriptions, and default table output options must be defined in the appropriate `*Messages.properties` resource bundle for the product/module.
+- Unless a shared description is appropriate for shared options in mixins/arggroups, rely on Picocli's default message key lookup mechanism. Do not specify `descriptionKey` or similar attributes in Picocli annotations; let Picocli resolve keys based on command/field/option names.
+- Use `@Mixin` to inject shared option groups or helpers. For product-specific shared options, create a dedicated mixin class.
+- For commands that produce output, implement `IOutputConfigSupplier` to define the default output format and columns.
+- For commands that require session or API context, use the appropriate `*UnirestInstanceSupplierMixin` and session helper pattern.
+- All classes that may need to be accessed reflectively (e.g., for Jackson serialization/deserialization, action YAML mapping, or runtime plugin discovery) must be annotated with `@Reflectable`.
+- When adding new commands, ensure they are registered as subcommands in the appropriate parent command class, and that all user-facing strings are externalized to the correct resource bundle.
+
 ## Exception Handling
-Don't throw standard Java exceptions (like RuntimeException) for CLI-surface errors; prefer the hierarchy in `com.fortify.cli.common.exception` so output and exit codes are consistent.
+Use hierarchy in `com.fortify.cli.common.exception` for consistent CLI error handling:
 
-Primary types:
-    - FcliSimpleException: Expected/user-facing error (invalid input, missing resource, conflicting options). Shows concise summary; underlying cause stack trace suppressed unless it's another non-simple exception.
-    - FcliTechnicalException: Unexpected technical failure (I/O, parsing, remote API protocol issue) that isn't a product bug but may need investigation. Full stack trace is printed.
-    - FcliBugException: Indicates a product defect or impossible state (logic invariant broken, unreachable code reached). Full stack trace printed. Message should guide user to file a bug.
+**Primary types:**
+- `FcliSimpleException`: User-facing errors (invalid input, missing resource). Concise summary; suppresses underlying stack trace unless cause is non-simple.
+- `FcliTechnicalException`: Unexpected technical failures (I/O, JSON parsing, network). Prints full stack trace.
+- `FcliBugException`: Product defects/impossible states. Full stack trace; message should guide bug report.
 
-Additional specialized subclasses may extend these (e.g. `FcliAbortedByUserException` for deliberate aborts, session/logout variants). Choose the most specific subclass available; otherwise use one of the primary types above.
+**Decision matrix:**
+1. Invalid/missing/ambiguous user input → `FcliSimpleException`
+2. External resource not found (normal possibility) → `FcliSimpleException` with remediation guidance
+3. User-initiated abort → `FcliAbortedByUserException` (extends `FcliSimpleException`)
+4. Low-level failure (network, file I/O, JSON parse) → `FcliTechnicalException` (wrap cause)
+5. Invariant violation, unreachable code → `FcliBugException`
 
-Decision matrix (choose first matching row):
-    1. User-provided input invalid, missing, ambiguous, conflicting -> FcliSimpleException.
-    2. External system/resource not found or access denied and this is a normal possibility -> FcliSimpleException (clear guidance, possible remediation).
-    3. Operation aborted intentionally by user confirmation flow -> FcliAbortedByUserException (subclass of FcliSimpleException).
-    4. Unexpected low-level failure (network hiccup, JSON parse error, file read error) -> FcliTechnicalException (wrap original cause).
-    5. Invariant violation, impossible branch, internal misuse of API -> FcliBugException.
+**Message style:**
+- Actionable: specify option name, expected format, remediation steps
+- Sentence case; no trailing periods unless multiple sentences
+- Multi-value options: use "|" for enums (`true|1|false|0`), ", " for sets
+- Contextual IDs in single quotes only when ambiguous
 
-Message guidelines:
-    - Be actionable: state what was wrong and how to correct (option name, expected format, required precondition).
-    - Avoid starting with lowercase; sentence case preferred. No trailing periods unless multiple sentences.
-    - Keep within one line when feasible; use "\n" for multi-line details (FcliSimpleException formatting maintains indentation).
-    - For multi-value guidance prefer lists separated by "|" for enums (e.g. true|1|false|0) or "<value1>, <value2>" for sets.
-    - Include contextual identifiers (names, ids) quoted only when necessary to disambiguate. Prefer single quotes.
+**Wrapping:**
+- Preserve root cause: `throw new FcliTechnicalException("Error reading "+file, e);`
+- Convert third-party exceptions at boundaries; don't re-wrap `AbstractFcliException`
+- Only wrap when adding context; otherwise propagate
 
-Wrapping causes:
-    - Always preserve root cause in constructor when useful: `throw new FcliTechnicalException("Error reading file "+file, e);`
-    - For FcliSimpleException, passing a cause will print either a concise summary (if cause is ParameterException or another FcliSimpleException) or the full stack of the cause for other types.
-    - Do NOT build manual stack trace strings; rely on `getStackTraceString()` implementation.
-
-Exit codes:
-    - Set a custom exit code only when needed (`exception.exitCode(<code>)` after construction). Default picocli execution exception exit code otherwise.
-    - Keep mapping stable; introduce new codes deliberately (document in CHANGELOG).
-
-When to rethrow vs convert:
-    - Convert known checked/third-party exceptions at boundary layers (REST helpers, file readers) to FcliTechnicalException.
-    - Let existing AbstractFcliException instances propagate unchanged (avoid wrapping to keep message formatting intact).
-    - Only catch and wrap if you can add meaningful context; otherwise allow bubble-up.
-
-Avoid:
-    - Throwing generic RuntimeException, Exception.
-    - Logging and then throwing for Simple exceptions (output already user-focused); log debug if extra diagnostics desired.
-    - Swallowing cause details—always attach original cause for technical/bug exceptions.
-
-Examples:
-    - Validation: `if (StringUtils.isBlank(name)) throw new FcliSimpleException("--name must be specified");`
-    - Remote parse: `try { parse(json); } catch (JsonProcessingException e) { throw new FcliTechnicalException("Error processing JSON data", e); }`
-    - Impossible branch: `default -> throw new FcliBugException("Unexpected scan status: "+status);`
-
-Subclasses: If adding a new subclass, extend the closest existing base (`FcliSimpleException` for user-level semantics) and keep constructors mirroring base for consistency. Provide a distinct semantic purpose; avoid proliferation for single-use cases.
-
-Testing: For command tests expecting failures, assert on exception class and message prefix (not full text) to allow minor wording refinements.
+**Examples:**
+```java
+if (StringUtils.isBlank(name)) throw new FcliSimpleException("--name must be specified");
+try { parse(json); } catch (JsonProcessingException e) { throw new FcliTechnicalException("Error processing JSON", e); }
+default -> throw new FcliBugException("Unexpected status: "+status);
+```
 
 
 ## Detailed Style Guide (AI & Manual Edits)
@@ -82,6 +111,9 @@ Testing: For command tests expecting failures, assert on exception class and mes
 
 ### Naming
 - Classes: PascalCase. Interfaces describing capabilities may use verbs/adjectives (e.g., `ObjectNodeProducerSupplier`, `RecordWriterFactory`).
+- Interfaces start with capitcal 'I' (e.g., `IRecordWriter`, `IOutputConfigSupplier`).
+- Prefer clarity over brevity in names.
+- For related/specialized classes, append specifics to end for alphabetical grouping (e.g., `RecordWriterCsv`, `RecordWriterYaml` rather than `CsvRecordWriter`, `YamlRecordWriter`).
 - Methods: camelCase verbs. Accessors for booleans use `is`/`has` prefixes.
 - Constants: `UPPER_SNAKE_CASE`.
 - Avoid abbreviations unless industry-standard (e.g., `ID`, `URL`, `JSON`).
@@ -89,12 +121,7 @@ Testing: For command tests expecting failures, assert on exception class and mes
 ### Comments & Javadoc
 - Provide Javadoc for public types & methods: purpose, key parameters, return, error conditions.
 - Avoid redundant comments restating code; focus on rationale, invariants, edge cases.
-- Use `TODO(username):` for actionable future work when necessary.
-
-### Error Handling
-- Throw specific exceptions (custom domain exceptions or `IllegalArgumentException`, `IllegalStateException`) rather than generic ones.
-- Fail fast on invalid arguments; validate early.
-- When wrapping exceptions, retain root cause.
+- Use `TODO:` for actionable future work when necessary.
 
 ### Null & Collections
 - Prefer non-null return values; return empty collections instead of `null`.
