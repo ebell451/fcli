@@ -29,7 +29,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor 
 public enum RecordWriterFactory {
     csv(true, RecordWriterCsv::new),
-    table(false, RecordWriterTable::new),
+    table(true, RecordWriterTable::new),
     expr(true, RecordWriterExpr::new),
     json(true, RecordWriterJson::new),
     xml(true, RecordWriterXml::new),

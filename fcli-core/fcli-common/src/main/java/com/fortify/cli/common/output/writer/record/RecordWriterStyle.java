@@ -86,6 +86,15 @@ public final class RecordWriterStyle {
         return getOrDefault(RecordWriterStyleElementGroup.BORDER)==RecordWriterStyleElement.md_border;
     }
     
+    /**
+     * Indicates whether overflowing column content should be wrapped onto multiple lines
+     * instead of being abbreviated with an ellipsis. Defaults to wrap if not explicitly 
+     * configured.
+     */
+    public final boolean isWrap() {
+        return getOrDefault(RecordWriterStyleElementGroup.WRAP)==RecordWriterStyleElement.wrap;
+    }
+    
     private final RecordWriterStyleElement getOrDefault(RecordWriterStyleElementGroup group) {
         return styleElementsByGroup.getOrDefault(group, group.defaultStyle());
     }
@@ -97,7 +106,8 @@ public final class RecordWriterStyle {
         flat(RecordWriterStyleElementGroup.FLAT), no_flat(RecordWriterStyleElementGroup.FLAT),
         array(RecordWriterStyleElementGroup.SINGULAR), single(RecordWriterStyleElementGroup.SINGULAR),
         border(RecordWriterStyleElementGroup.BORDER), no_border(RecordWriterStyleElementGroup.BORDER),
-        md_border(RecordWriterStyleElementGroup.BORDER)
+        md_border(RecordWriterStyleElementGroup.BORDER),
+        wrap(RecordWriterStyleElementGroup.WRAP), no_wrap(RecordWriterStyleElementGroup.WRAP)
         ;
         
         @Getter private final RecordWriterStyleElementGroup group;
@@ -117,7 +127,8 @@ public final class RecordWriterStyle {
         PRETTY("pretty"), 
         FLAT("no-flat"), 
         SINGULAR("array"),
-        BORDER("no-border");
+        BORDER("no-border"),
+        WRAP("wrap");
         
         private final String defaultStyleElementName;
         

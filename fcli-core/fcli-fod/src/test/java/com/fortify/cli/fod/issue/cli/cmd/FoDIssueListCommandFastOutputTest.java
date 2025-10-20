@@ -13,12 +13,9 @@
 package com.fortify.cli.fod.issue.cli.cmd;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
-import com.fortify.cli.common.output.writer.record.RecordWriterFactory;
 import com.fortify.cli.fod.issue.helper.FoDIssueHelper.IssueAggregationData;
 
 /**
@@ -32,11 +29,5 @@ public class FoDIssueListCommandFastOutputTest {
         assertEquals("N/A", blank.getIdsString());
         assertEquals(0, blank.getIds().size());
         assertEquals("N/A", blank.getReleaseNamesString());
-    }
-
-    @Test
-    void testStreamingCapabilityFlags() {
-        assertTrue(RecordWriterFactory.json.isStreaming());
-        assertFalse(RecordWriterFactory.table.isStreaming());
     }
 }
