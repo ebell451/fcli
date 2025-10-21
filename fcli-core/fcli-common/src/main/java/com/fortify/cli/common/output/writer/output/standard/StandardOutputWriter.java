@@ -159,7 +159,8 @@ public class StandardOutputWriter implements IOutputWriter {
             return OutputRecordWriterFactory.builder().singular(isSingularOutput()).messageResolver(messageResolver)
                     .addActionColumn(cmd != null && cmd instanceof IActionCommandResultSupplier).recordWriterArgs(recordWriterArgs)
                     .recordWriterFactory(recordWriterFactory)
-                    .recordWriterStyle(RecordWriterStyle.apply(outputOptions.getOutputStyleElements())).writerSupplier(this::createWriter)
+                    .recordWriterStyle(RecordWriterStyle.apply(outputOptions.getOutputStyleElements()))
+                    .writerSupplier(this::createWriter)
                     .build().createRecordWriter();
         }
 

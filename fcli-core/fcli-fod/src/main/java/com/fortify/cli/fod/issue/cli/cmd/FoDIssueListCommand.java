@@ -28,8 +28,6 @@ import com.fortify.cli.common.json.producer.AbstractObjectNodeProducer.AbstractO
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.json.producer.ObjectNodeProducerApplyFrom;
 import com.fortify.cli.common.json.producer.SimpleObjectNodeProducer;
-import com.fortify.cli.common.mcp.MCPDefaultValue;
-import com.fortify.cli.common.mcp.MCPExclude;
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamGeneratorSupplier;
 import com.fortify.cli.common.rest.query.IServerSideQueryParamValueGenerator;
@@ -64,8 +62,7 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     @Mixin private FoDFiltersParamMixin filterParamMixin;
     @Mixin private FoDIssueEmbedMixin embedMixin;
     @Mixin private FoDIssueIncludeMixin includeMixin;
-    @MCPExclude @MCPDefaultValue("true")
-    @Option(names = {"--fast-output"}) private boolean fastOutput;
+    @Option(names="--aggregate", defaultValue="false") private boolean aggregate;
     @Getter private final IServerSideQueryParamValueGenerator serverSideQueryParamGenerator = new FoDFiltersParamGenerator()
             .add("id","id")
             .add("vulnId","vulnId")
@@ -230,11 +227,16 @@ public class FoDIssueListCommand extends AbstractFoDOutputCommand implements ISe
     private boolean isEffectiveFastOutput() {
         boolean appSpecified = appResolver.getAppNameOrId() != null;
         boolean releaseSpecified = releaseResolver.getQualifiedReleaseNameOrId() != null;
-        if ( !fastOutput || !appSpecified || releaseSpecified ) { return false; }
+        if ( !appSpecified || releaseSpecified ) { return false; }
+        boolean fastOutputStyle = outputHelper.getRecordWriterStyle().isFastOutput();
         boolean streamingSupported = outputHelper.isStreamingOutputSupported();
         boolean recordConsumerConfigured = getRecordConsumer()!=null;
-        // Streaming supported by output format OR record consumer present (actions / MCP server)
-        return (streamingSupported || recordConsumerConfigured);
+        // Effective fast output requires:
+        // - application specified (multiple releases)
+        // - fast output style
+        // - no aggregation (merging requires full set)
+        // - streaming output or record consumer configured
+        return fastOutputStyle && !aggregate && (streamingSupported || recordConsumerConfigured);
     }
     
     private final JsonNode removeReleaseProperties(JsonNode n) {

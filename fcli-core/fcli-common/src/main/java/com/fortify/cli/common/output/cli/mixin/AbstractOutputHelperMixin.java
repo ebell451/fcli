@@ -15,6 +15,7 @@ package com.fortify.cli.common.output.cli.mixin;
 import com.fortify.cli.common.json.producer.IObjectNodeProducer;
 import com.fortify.cli.common.output.writer.output.IOutputWriterFactory;
 import com.fortify.cli.common.output.writer.output.standard.StandardOutputConfig;
+import com.fortify.cli.common.output.writer.record.RecordWriterStyle;
 
 public abstract class AbstractOutputHelperMixin implements IOutputHelper {
     @Override
@@ -34,4 +35,8 @@ public abstract class AbstractOutputHelperMixin implements IOutputHelper {
     protected abstract StandardOutputConfig getBasicOutputConfig();
 
     protected abstract IOutputWriterFactory getOutputWriterFactory();
+
+    public RecordWriterStyle getRecordWriterStyle() {
+        return getOutputWriterFactory().getRecordWriterStyle();
+    }
 }

@@ -18,6 +18,7 @@ import com.fortify.cli.common.output.writer.output.IOutputWriterFactory;
 import com.fortify.cli.common.output.writer.output.standard.StandardOutputConfig;
 import com.fortify.cli.common.output.writer.output.standard.StandardOutputWriter;
 import com.fortify.cli.common.output.writer.record.RecordWriterFactory;
+import com.fortify.cli.common.output.writer.record.RecordWriterStyle;
 
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Mixin;
@@ -28,6 +29,8 @@ public class StandardOutputWriterFactoryMixin implements IOutputWriterFactory {
 
     @ArgGroup(headingKey = "arggroup.output.heading", exclusive = false, order = 30)
     private OutputOptionsArgGroup outputOptionsArgGroup = new OutputOptionsArgGroup();
+
+    public OutputOptionsArgGroup getOutputOptionsArgGroup() { return outputOptionsArgGroup; }
 
     @Override
     public IOutputWriter createOutputWriter(StandardOutputConfig defaultOutputConfig) {
@@ -41,5 +44,10 @@ public class StandardOutputWriterFactoryMixin implements IOutputWriterFactory {
                 ? defaultOutputConfig.defaultFormat()
                 : outputFormatConfig.getRecordWriterFactory();
         return result==null ? RecordWriterFactory.table : result;
+    }
+    
+    @Override
+    public RecordWriterStyle getRecordWriterStyle() {
+        return RecordWriterStyle.apply(getOutputOptionsArgGroup().getOutputStyleElements());
     }
 }

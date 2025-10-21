@@ -62,6 +62,8 @@ public class TestRunner {
     }
     
     private static void setSystemProperties(String[] args) {
+        System.setProperty("fcli.no-terminal", "true"); // Allow unlimited table width
+        System.setProperty("fcli.env.FCLI_DEFAULT_STYLE", "no-fast-output"); // Disable fast output style for tests
         if ( args!=null ) {
             args.each {
                 def parsed = false

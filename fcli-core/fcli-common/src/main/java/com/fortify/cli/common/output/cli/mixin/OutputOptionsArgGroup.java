@@ -40,8 +40,7 @@ import picocli.CommandLine.Option;
  * LLM/MCP environments.
  */
 public final class OutputOptionsArgGroup implements IOutputOptions {
-    @Option(names = {"-o",
-            "--output"}, order = 1, converter = OutputFormatConfigConverter.class, completionCandidates = OutputFormatIterable.class, paramLabel = "<type+args>")
+    @Option(names = {"-o", "--output"}, order = 1, converter = OutputFormatConfigConverter.class, completionCandidates = OutputFormatIterable.class, paramLabel = "<type+args>")
     @MCPExclude
     @Getter
     private OutputFormatConfig outputFormatConfig;

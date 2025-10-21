@@ -25,11 +25,15 @@ public class ConsoleHelper {
 
     @Getter(lazy=true) private static final Integer terminalWidth = determineTerminalWidth();
     
-    public static final int getTerminalWidthOrDefault() {
-        return getTerminalWidth()!=null ? getTerminalWidth() : 80;
+    public static final boolean hasTerminal() {
+        return System.console()!=null && !"true".equals(System.getProperty("fcli.no-terminal"));
     }
     
     private static final Integer determineTerminalWidth() {
+        if ( !hasTerminal() ) {
+            LOG.debug("No terminal detected, returning null for unlimited terminal width");
+            return null;
+        }
         var result = getJAnsiTerminalWidth();
         if ( result==null ) {
             result = getPicocliTerminalWidth();

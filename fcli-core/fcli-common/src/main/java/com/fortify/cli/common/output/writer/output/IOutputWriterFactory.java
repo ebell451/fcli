@@ -13,7 +13,9 @@
 package com.fortify.cli.common.output.writer.output;
 
 import com.fortify.cli.common.output.writer.output.standard.StandardOutputConfig;
+import com.fortify.cli.common.output.writer.record.RecordWriterStyle;
 
 public interface IOutputWriterFactory {
     IOutputWriter createOutputWriter(StandardOutputConfig standardOutputConfig);
+    RecordWriterStyle getRecordWriterStyle();
 }

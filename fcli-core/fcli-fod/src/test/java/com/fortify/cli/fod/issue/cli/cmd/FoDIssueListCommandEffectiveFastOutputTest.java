@@ -21,11 +21,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.fortify.cli.common.output.cli.mixin.OutputHelperMixins;
+import com.fortify.cli.common.output.writer.record.RecordWriterStyle;
+import com.fortify.cli.common.output.writer.record.RecordWriterStyle.RecordWriterStyleElement;
 
 /**
- * Tests for FoDIssueListCommand.isEffectiveFastOutput logic.
- * We inject mixin fields and fastOutput flag via reflection and override outputHelper with a stub
- * that can toggle streaming capability.
+ * Tests for FoDIssueListCommand.isEffectiveFastOutput logic after migration to style-based fast-output.
+ * We inject mixin fields and override outputHelper with a stub that can toggle streaming capability
+ * and selected style (fast-output vs no-fast-output).
  */
 public class FoDIssueListCommandEffectiveFastOutputTest {
     private FoDIssueListCommand cmd;
@@ -44,7 +46,7 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     @Test
     void fastOutputActiveWhenAppAndStreaming() throws Exception {
         streamingStub.streamingSupported = true;
-        setFastOutput(true);
+        streamingStub.fastOutputStyle = true;
         setApp("myApp");
         assertTrue(invokeIsEffectiveFastOutput());
     }
@@ -52,7 +54,7 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     @Test
     void fastOutputInactiveWhenStreamingUnsupported() throws Exception {
         streamingStub.streamingSupported = false;
-        setFastOutput(true);
+        streamingStub.fastOutputStyle = true;
         setApp("myApp");
         assertFalse(invokeIsEffectiveFastOutput());
     }
@@ -60,7 +62,7 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     @Test
     void fastOutputInactiveWithoutApp() throws Exception {
         streamingStub.streamingSupported = true;
-        setFastOutput(true);
+        streamingStub.fastOutputStyle = true;
         // no app set
         assertFalse(invokeIsEffectiveFastOutput());
     }
@@ -68,7 +70,7 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     @Test
     void fastOutputInactiveWithRelease() throws Exception {
         streamingStub.streamingSupported = true;
-        setFastOutput(true);
+        streamingStub.fastOutputStyle = true;
         setApp("myApp");
         setRelease("123");
         assertFalse(invokeIsEffectiveFastOutput());
@@ -77,7 +79,7 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     @Test
     void fastOutputInactiveWhenFlagFalse() throws Exception {
         streamingStub.streamingSupported = true;
-        setFastOutput(false);
+        streamingStub.fastOutputStyle = false;
         setApp("myApp");
         assertFalse(invokeIsEffectiveFastOutput());
     }
@@ -89,7 +91,6 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
         f.set(target, value);
     }
 
-    private void setFastOutput(boolean v) throws Exception { setField(cmd, "fastOutput", v); }
     private void setApp(String app) throws Exception {
         Object appResolver = getField(cmd, "appResolver");
         setField(appResolver, "appNameOrId", app);
@@ -114,7 +115,12 @@ public class FoDIssueListCommandEffectiveFastOutputTest {
     // Stub output helper that only toggles streaming capability
     private static class StreamingStubOutputHelper extends OutputHelperMixins.List {
         boolean streamingSupported;
-        @Override
-        public boolean isStreamingOutputSupported() { return streamingSupported; }
+        boolean fastOutputStyle = true;
+        @Override public boolean isStreamingOutputSupported() { return streamingSupported; }
+        @Override public RecordWriterStyle getRecordWriterStyle() {
+            return fastOutputStyle
+                    ? RecordWriterStyle.apply(RecordWriterStyleElement.fast_output)
+                    : RecordWriterStyle.apply(RecordWriterStyleElement.no_fast_output);
+        }
     }
 }

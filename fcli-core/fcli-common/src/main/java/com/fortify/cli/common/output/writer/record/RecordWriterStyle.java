@@ -94,6 +94,11 @@ public final class RecordWriterStyle {
     public final boolean isWrap() {
         return getOrDefault(RecordWriterStyleElementGroup.WRAP)==RecordWriterStyleElement.wrap;
     }
+
+    /** Indicates whether fast-output (streaming) style is enabled for table output. Defaults to fast-output. */
+    public final boolean isFastOutput() {
+        return getOrDefault(RecordWriterStyleElementGroup.FAST_OUTPUT)==RecordWriterStyleElement.fast_output;
+    }
     
     private final RecordWriterStyleElement getOrDefault(RecordWriterStyleElementGroup group) {
         return styleElementsByGroup.getOrDefault(group, group.defaultStyle());
@@ -107,7 +112,8 @@ public final class RecordWriterStyle {
         array(RecordWriterStyleElementGroup.SINGULAR), single(RecordWriterStyleElementGroup.SINGULAR),
         border(RecordWriterStyleElementGroup.BORDER), no_border(RecordWriterStyleElementGroup.BORDER),
         md_border(RecordWriterStyleElementGroup.BORDER),
-        wrap(RecordWriterStyleElementGroup.WRAP), no_wrap(RecordWriterStyleElementGroup.WRAP)
+        wrap(RecordWriterStyleElementGroup.WRAP), no_wrap(RecordWriterStyleElementGroup.WRAP),
+        fast_output(RecordWriterStyleElementGroup.FAST_OUTPUT), no_fast_output(RecordWriterStyleElementGroup.FAST_OUTPUT)
         ;
         
         @Getter private final RecordWriterStyleElementGroup group;
@@ -128,7 +134,8 @@ public final class RecordWriterStyle {
         FLAT("no-flat"), 
         SINGULAR("array"),
         BORDER("no-border"),
-        WRAP("wrap");
+        WRAP("wrap"),
+        FAST_OUTPUT("fast-output");
         
         private final String defaultStyleElementName;
         
