@@ -7,7 +7,7 @@ on:
       - '**'
        
 env:
-  native_image_opts: --verbose -H:Log=registerResource:verbose -H:+PrintClassInitialization
+  native_image_opts: --verbose -H:Log=registerResource:verbose -H:+PrintClassInitialization -march=compatibility
   graal_distribution: graalvm-community
   graal_java_version: 21
           
@@ -78,7 +78,7 @@ jobs:
       
       - name: Build release ${{env.RELEASE_VERSION}}
         if: env.DO_BUILD
-        run: ./gradlew clean build dist distThirdPartyReleaseAsset distFtest -Pversion=${{env.RELEASE_VERSION}}
+        run: ./gradlew clean build dist distThirdPartyReleaseAsset distFtest -Pversion=${{env.RELEASE_VERSION}} -PautoFormat=false
         
       - name: Check fcli version
         if: env.DO_BUILD
