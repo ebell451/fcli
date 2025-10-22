@@ -57,6 +57,8 @@ public abstract class AbstractRecordWriter<T> implements IRecordWriter {
             writer.flush();
             close(out); // This should also close the writer
         }
+        // Code above is supposed to close the writer, but just in case it doesn't:
+        try { writer.close(); } catch (Exception e) {}
     }
     
     protected abstract void closeWithNoData(Writer writer) throws IOException;

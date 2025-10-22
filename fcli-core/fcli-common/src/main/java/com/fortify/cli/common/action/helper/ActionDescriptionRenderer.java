@@ -30,6 +30,7 @@ import com.fortify.cli.common.spel.wrapper.TemplateExpression;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 
 @RequiredArgsConstructor(access = AccessLevel.PRIVATE)
 public class ActionDescriptionRenderer {
@@ -86,15 +87,17 @@ public class ActionDescriptionRenderer {
     
     @Reflectable
     public static final class ActionDescriptionRendererSpelFunctions {
+        @SneakyThrows
         public static final String include(String resourcePath) {
-            var is = ActionDescriptionRendererSpelFunctions.class.getResourceAsStream(resourcePath);
-            if ( is==null ) {
-                throw new FcliBugException(String.format("Class path resource %s not found", resourcePath));
-            }
-            try {
-                return IOUtils.toString(is, StandardCharsets.UTF_8);
-            } catch ( Exception e ) {
-                throw new FcliTechnicalException("Unable to load classpath resource "+resourcePath, e);
+            try ( var is = ActionDescriptionRendererSpelFunctions.class.getResourceAsStream(resourcePath) ) {
+                if ( is==null ) {
+                    throw new FcliBugException(String.format("Class path resource %s not found", resourcePath));
+                }
+                try {
+                    return IOUtils.toString(is, StandardCharsets.UTF_8);
+                } catch ( Exception e ) {
+                    throw new FcliTechnicalException("Unable to load classpath resource "+resourcePath, e);
+                }
             }
         }
     }
