@@ -46,23 +46,23 @@ import lombok.NoArgsConstructor;
         """)
 @SampleYamlSnippets({"""
         steps:
-        - run.fcli: 
-            list-av: fcli ssc av ls
+          - run.fcli: 
+              list-av: fcli ssc av ls
         ""","""
         steps:
-        - run.fcli:
-            avList:
+          - run.fcli:
+              avList:
                 cmd: ssc av ls
                 records.collect: true
-        - log.debug: ${avList.records}
+          - log.debug: ${avList.records}
         ""","""
         steps:
-        - run.fcli:
-            process-av:
+          - run.fcli:
+              process-av:
                 cmd: ssc av ls
                 records.for-each:
-                record.var-name: av
-                do:
+                  record.var-name: av
+                  do:
                     - log.debug: ${av}
         """})
 public final class ActionStepRunFcliEntry extends AbstractActionElementIf implements IMapKeyAware<String> {

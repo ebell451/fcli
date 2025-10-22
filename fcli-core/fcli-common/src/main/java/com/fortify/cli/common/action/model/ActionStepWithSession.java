@@ -36,14 +36,14 @@ import lombok.NoArgsConstructor;
 @JsonTypeName("with-session")
 @JsonClassDescription("Define session login and logout commands, respectively executed before and after the steps listed in the `do` block.")
 @SampleYamlSnippets("""
-    steps:
-        - with:
-            sessions:
-            - login: fcli fod session login ... --fod-session=myActionSession
-                logout: fcli fod session logout --fod-session=myActionSession
-        do:
-            - run.fcli:  
-                myCmd: fcli fod ... --fod-session-myActionSession
+       steps:
+         - with:
+             sessions:
+               - login: fcli fod session login ... --fod-session=myActionSession
+                 logout: fcli fod session logout --fod-session=myActionSession
+           do:
+             - run.fcli:  
+                 myCmd: fcli fod ... --fod-session-myActionSession
         """)
 public final class ActionStepWithSession extends AbstractActionElementIf {
     @JsonPropertyDescription("""

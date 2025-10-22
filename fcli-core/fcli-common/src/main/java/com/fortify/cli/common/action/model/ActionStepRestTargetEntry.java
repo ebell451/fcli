@@ -38,11 +38,11 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Define a (third-party) REST target against which REST calls can be executed.")
 @SampleYamlSnippets("""
         steps:
-        - rest.target:
-            example:
+          - rest.target:
+              example:
                 baseUrl: https://example.com/my-app
                 headers:
-                Authorization: ${exampleAuth}
+                  Authorization: ${exampleAuth}
         """)
 public final class ActionStepRestTargetEntry extends AbstractActionElementIf {
     @JsonPropertyDescription("""

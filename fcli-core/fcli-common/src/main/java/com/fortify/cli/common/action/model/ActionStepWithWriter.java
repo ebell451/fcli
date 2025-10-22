@@ -39,19 +39,19 @@ import lombok.NoArgsConstructor;
 @JsonTypeName("with-writer")
 @JsonClassDescription("Define a writer that can be referenced by steps in the `do` block, automatically closing the writer once the steps in the `do` block have completed.")
 @SampleYamlSnippets("""
-    steps:
+      steps:
         - with:
             writers:
-            csvWriter:
+              csvWriter:
                 to: ${cli.file}
-            type: csv
-        do:
+              type: csv
+          do:
             - records.for-each:
                 from: ${records}
                 record.var-name: record
                 do:
-                - writer.append: 
-                    csvWriter: ${record}
+                  - writer.append: 
+                      csvWriter: ${record}
         """)
 public final class ActionStepWithWriter extends AbstractActionElementIf {
     @JsonPropertyDescription("""
