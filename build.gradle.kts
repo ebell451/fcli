@@ -60,26 +60,11 @@ allprojects {
                 // Re-introduced: import cleanup (order + unused removal) as requested
                 removeUnusedImports()
                 importOrder("java", "javax", "org", "com", "")
-                // Step 1: Replace any tabs with 4 spaces (preserving visual width)
+                // Replace any tabs with 4 spaces (preserving visual width)
                 custom("tabsToSpaces") { content: String ->
                     if (!content.contains('\t')) content else content.replace("\t", "    ")
                 }
-                // Step 2: Ensure indentation uses multiples of 4 spaces for code lines (skip Javadoc/ block comment continuations and blank lines)
-                custom("normalizeIndentation") { content: String ->
-                    val lines: List<String> = content.split("\n")
-                    val normalized = lines.map { line: String ->
-                        if (line.isEmpty()) return@map line
-                        val leading = line.takeWhile { ch -> ch == ' ' }
-                        val rest = line.drop(leading.length)
-                        if (rest.startsWith("*") || rest.startsWith("/*") || rest.startsWith("*/")) return@map line
-                        if (leading.isEmpty()) return@map line
-                        val spaceCount = leading.length
-                        val adjustedCount = if (spaceCount % 4 == 0) spaceCount else (spaceCount / 4) * 4
-                        val newLeading = " ".repeat(adjustedCount)
-                        if (newLeading == leading) line else newLeading + rest
-                    }
-                    normalized.joinToString("\n")
-                }
+                // Replace any existing Open Text license header with updated standard header
                 custom("stripOldOpenTextHeader") { content: String ->
                     val pattern = Regex("""^/\*{1,}.*?Open Text.*?\*/\s*""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
                     pattern.replace(content) { mr -> if (mr.value.contains("warranties", ignoreCase = true)) "" else mr.value }
