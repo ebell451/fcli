@@ -9,7 +9,7 @@ javaPlatform { allowDependencies() }
 
 dependencies {
     api(platform("com.fasterxml.jackson:jackson-bom:2.20.0"))
-    api(platform("org.springframework:spring-framework-bom:6.2.11"))
+    api(platform("org.springframework:spring-framework-bom:6.2.12"))
     api(platform("io.modelcontextprotocol.sdk:mcp-bom:0.14.1"))
     constraints {
         api("info.picocli:picocli:4.7.5")
