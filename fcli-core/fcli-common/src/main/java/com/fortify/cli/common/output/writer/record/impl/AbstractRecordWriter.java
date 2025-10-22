@@ -50,15 +50,21 @@ public abstract class AbstractRecordWriter<T> implements IRecordWriter {
 
     @Override @SneakyThrows
     public final void close() {
-        var writer = getWriter();
-        if ( out==null) {
-            closeWithNoData(writer);
-        } else {
-            writer.flush();
-            close(out); // This should also close the writer
+        Writer writer = null;
+        try {
+            writer = getWriter();
+            if ( out==null) {
+                closeWithNoData(writer);
+            } else {
+                writer.flush();
+                close(out); // This should also close the writer
+            }
+        } finally {
+            // Code above is supposed to close the writer, but just in case it doesn't:
+            if ( writer!=null ) {
+                try { writer.close(); } catch (Exception e) {}
+            }
         }
-        // Code above is supposed to close the writer, but just in case it doesn't:
-        try { writer.close(); } catch (Exception e) {}
     }
     
     protected abstract void closeWithNoData(Writer writer) throws IOException;
