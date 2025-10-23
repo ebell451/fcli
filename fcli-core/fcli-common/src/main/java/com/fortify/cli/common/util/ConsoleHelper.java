@@ -22,6 +22,7 @@ import picocli.CommandLine.Model.CommandSpec;
 
 public class ConsoleHelper {
     private static final Logger LOG = LoggerFactory.getLogger(ConsoleHelper.class);
+    private static final boolean JANSI_DISABLE = Boolean.getBoolean("jansi.disable");
 
     @Getter(lazy=true) private static final Integer terminalWidth = determineTerminalWidth();
     
@@ -42,13 +43,11 @@ public class ConsoleHelper {
     }
 
     private static final Integer getJAnsiTerminalWidth() {
-        try {
-            return (Integer)Class.forName("org.fusesource.jansi.AnsiConsole")
-                    .getMethod("getTerminalWidth").invoke(null);
-        } catch ( Exception e ) {
-            LOG.debug("Unable to determine terminal width from JANSI AnsiPrintStream: {}", e.getMessage());
+        var result = (Integer)invokeAnsiConsoleMethod("getTerminalWidth");
+        if ( result == null ) {
+            LOG.debug("Unable to determine terminal width from JAnsi");
         }
-        return null;
+        return result;
     }
     
     private static final Integer getPicocliTerminalWidth() {
@@ -64,4 +63,39 @@ public class ConsoleHelper {
     
     @Command(name = "dummy")
     public static final class DummyCommand {}
+
+    /**
+     * Install the JAnsi console if not disabled. Safe no-op if disabled or unavailable.
+     */
+    public static final void installAnsiConsole() {
+        invokeAnsiConsoleMethod("systemInstall");
+    }
+
+    /**
+     * Uninstall the JAnsi console if previously installed (and not disabled). Safe no-op otherwise.
+     */
+    public static final void uninstallAnsiConsole() {
+        invokeAnsiConsoleMethod("systemUninstall");
+    }
+
+    /**
+     * Invoke a static method on org.fusesource.jansi.AnsiConsole reflectively, only if JAnsi isn't disabled.
+     * @param methodName The static method name to invoke
+     * @return Result of the invocation, or null if disabled/unavailable/error
+     */
+    private static Object invokeAnsiConsoleMethod(String methodName) {
+        if ( JANSI_DISABLE ) {
+            LOG.debug("JAnsi disabled by system property 'jansi.disable', not invoking {}", methodName);
+            return null;
+        }
+        try {
+            LOG.debug("`Invoking JAnsi method {}`", methodName);
+            var clazz = Class.forName("org.fusesource.jansi.AnsiConsole");
+            var method = clazz.getMethod(methodName);
+            return method.invoke(null);
+        } catch ( Throwable t ) {
+            LOG.debug("Unable to invoke JAnsi method {}: {}", methodName, t.getMessage());
+            return null;
+        }
+    }
 }

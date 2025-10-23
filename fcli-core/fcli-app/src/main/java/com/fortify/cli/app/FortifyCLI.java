@@ -16,6 +16,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 
 import com.fortify.cli.app.runner.DefaultFortifyCLIRunner;
+import com.fortify.cli.common.util.ConsoleHelper;
 
 import lombok.SneakyThrows;
 
@@ -27,7 +28,7 @@ import lombok.SneakyThrows;
  * @author Ruud Senden
  */
 public class FortifyCLI {
-    private static final Boolean JANSI_DISABLE = Boolean.getBoolean("jansi.disable");
+    // JAnsi enablement/disablement handled centrally in ConsoleHelper
 
     /**
      * This is the main entry point for executing the Fortify CLI.
@@ -41,7 +42,7 @@ public class FortifyCLI {
         var orgOut = System.out;
         var orgErr = System.err;
         try {
-            installAnsiConsole();
+            ConsoleHelper.installAnsiConsole();
             // Avoid any fcli code from closing stdout/stderr streams
             System.setOut(new NonClosingPrintStream(orgOut));
             System.setErr(new NonClosingPrintStream(orgErr));
@@ -49,33 +50,7 @@ public class FortifyCLI {
         } finally {
             System.setOut(orgOut);
             System.setErr(orgErr);
-            uninstallAnsiConsole();
-        }
-    }
-    
-    private static final void installAnsiConsole() {
-        tryInvokeAnsiConsoleMethod("systemInstall");
-    }
-    
-    private static final void uninstallAnsiConsole() {
-        tryInvokeAnsiConsoleMethod("systemUninstall");
-    }
-    
-    private static final void tryInvokeAnsiConsoleMethod(String methodName) {
-        if ( !JANSI_DISABLE ) {
-            try {
-                // AnsiConsole performs eager initialization in a static block, so
-                // referencing the class directly would initialize Jansi even if
-                // isJansiEnabled() returns false. As such, we use reflection to 
-                // only load the AnsiConsole class if Jansi is enabled, and then
-                // invoke the specified method. Note that in order for this to work, 
-                // we have a reflect-config.json file to allow reflective access to
-                // AnsiConsole.
-                Class.forName("org.fusesource.jansi.AnsiConsole")
-                    .getMethod(methodName).invoke(null);
-            } catch ( Throwable t ) {
-                t.printStackTrace();
-            }
+            ConsoleHelper.uninstallAnsiConsole();
         }
     }
     
