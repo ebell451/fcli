@@ -22,8 +22,6 @@ import picocli.CommandLine.Model.CommandSpec;
 
 public class ConsoleHelper {
     private static final Logger LOG = LoggerFactory.getLogger(ConsoleHelper.class);
-    private static final boolean JANSI_DISABLE = Boolean.getBoolean("jansi.disable");
-
     @Getter(lazy=true) private static final Integer terminalWidth = determineTerminalWidth();
     
     public static final boolean hasTerminal() {
@@ -36,8 +34,10 @@ public class ConsoleHelper {
             return null;
         }
         var result = getJAnsiTerminalWidth();
+        LOG.debug("Terminal width from JAnsi: {}", result);
         if ( result==null ) {
             result = getPicocliTerminalWidth();
+            LOG.debug("Terminal width from Picocli: {}", result);
         }
         return result;
     }
@@ -84,7 +84,7 @@ public class ConsoleHelper {
      * @return Result of the invocation, or null if disabled/unavailable/error
      */
     private static Object invokeAnsiConsoleMethod(String methodName) {
-        if ( JANSI_DISABLE ) {
+        if ( JAnsiConfig.JANSI_DISABLE ) {
             LOG.debug("JAnsi disabled by system property 'jansi.disable', not invoking {}", methodName);
             return null;
         }
