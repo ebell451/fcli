@@ -23,8 +23,6 @@ import com.fortify.cli.common.util.ConsoleHelper;
  * @author Ruud Senden
  */
 public class FortifyCLI {
-    // JAnsi enablement/disablement handled centrally in ConsoleHelper
-
     /**
      * This is the main entry point for executing the Fortify CLI.
      * @param args Command line options passed to Fortify CLI
