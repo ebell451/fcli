@@ -89,7 +89,7 @@ public class ConsoleHelper {
             return null;
         }
         try {
-            LOG.debug("`Invoking JAnsi method {}`", methodName);
+            LOG.debug("Invoking JAnsi method {}", methodName);
             var clazz = Class.forName("org.fusesource.jansi.AnsiConsole");
             var method = clazz.getMethod(methodName);
             return method.invoke(null);

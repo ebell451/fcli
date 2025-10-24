@@ -86,8 +86,6 @@ public class ActionStepProcessorRunFcli extends AbstractActionStepProcessorMapEn
                     .cmd(cmd)
                     .progressOptionValueIfNotPresent(ctx.getConfig().getProgressWriter().type())
                     .defaultOptionsIfNotPresent(ctx.getConfig().getDefaultFcliRunOptions())
-                    .stdout(System.out)
-                    .stderr(System.err)
                     .stdoutOutputType(stdoutOutputType)
                     .stderrOutputType(stderrOutputType)
                     .onResult(r->onFcliResult(entry, recordConsumer, r))
