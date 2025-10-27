@@ -29,36 +29,54 @@ public class ConsoleHelper {
     }
     
     private static final Integer determineTerminalWidth() {
-        if ( !hasTerminal() ) {
+        var result = getTerminalWidthFromSystemProperty();
+        if ( result==null && !hasTerminal() ) {
             LOG.debug("No terminal detected, returning null for unlimited terminal width");
             return null;
         }
-        var result = getJAnsiTerminalWidth();
-        LOG.debug("Terminal width from JAnsi: {}", result);
+        if ( result==null ) {
+            result = getJAnsiTerminalWidth();
+        }
         if ( result==null ) {
             result = getPicocliTerminalWidth();
-            LOG.debug("Terminal width from Picocli: {}", result);
         }
+        return result;
+    }
+    
+    private static final Integer getTerminalWidthFromSystemProperty() {
+        Integer result = null;
+        String propValue = System.getProperty("fcli.terminal.width");
+        if ( propValue!=null ) {
+            try {
+                result = Integer.valueOf(propValue);
+            } catch ( NumberFormatException nfe ) {
+                LOG.warn("Invalid value for system property 'fcli.terminal.width': {}", propValue);
+            }
+        }
+        LOG.debug("Terminal width from system property 'fcli.terminal.width': {}", result);
         return result;
     }
 
     private static final Integer getJAnsiTerminalWidth() {
         var result = (Integer)invokeAnsiConsoleMethod("getTerminalWidth");
-        if ( result == null ) {
-            LOG.debug("Unable to determine terminal width from JAnsi");
+        if ( result!=null && result<=0 ) { // JAnsi returns 0 if it cannot determine the terminal width
+            result = null;
         }
+        LOG.debug("Terminal width from JAnsi: {}", result);
         return result;
     }
     
     private static final Integer getPicocliTerminalWidth() {
+        Integer result = null;
         try {
             CommandSpec spec = new CommandLine(DummyCommand.class).getCommandSpec();
             spec.usageMessage().autoWidth(true); // use terminal width
-            return spec.usageMessage().width(); // obtain the terminal width
+            result = spec.usageMessage().width(); // obtain the terminal width
         } catch ( Exception e ) {
             LOG.debug("Unable to determine terminal width from picocli: {}", e.getMessage());
         }
-        return null;
+        LOG.debug("Terminal width from Picocli: {}", result);
+        return result;
     }
     
     @Command(name = "dummy")
