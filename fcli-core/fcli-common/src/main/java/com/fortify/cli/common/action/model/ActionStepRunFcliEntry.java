@@ -46,27 +46,30 @@ import lombok.NoArgsConstructor;
         """)
 @SampleYamlSnippets({"""
         steps:
-        - run.fcli: 
-            list-av: fcli ssc av ls
+          - run.fcli: 
+              list-av: fcli ssc av ls
         ""","""
         steps:
-        - run.fcli:
-            avList:
+          - run.fcli:
+              avList:
                 cmd: ssc av ls
                 records.collect: true
-        - log.debug: ${avList.records}
-        ""","""
-        steps:
-        - run.fcli:
-            process-av:
-                cmd: ssc av ls
-                records.for-each:
-                record.var-name: av
-                do:
-                    - log.debug: ${av}
-        """})
+          - log.debug: ${avList.records}
+        """,
+        ActionStepRunFcliEntry.SAMPLE_SNIPPET_FOR_EACH})
 public final class ActionStepRunFcliEntry extends AbstractActionElementIf implements IMapKeyAware<String> {
     @JsonIgnore private String key;
+    
+    public static final String SAMPLE_SNIPPET_FOR_EACH = """
+        steps:
+          - run.fcli:
+              process-av:
+                cmd: ssc av ls
+                records.for-each:
+                  record.var-name: av
+                  do:
+                    - log.debug: ${av}
+            """;
     
     /** Allow for deserializing from a string that specified the fcli command to run, rather than object */
     public ActionStepRunFcliEntry(String cmdString) {
@@ -227,6 +230,7 @@ public final class ActionStepRunFcliEntry extends AbstractActionElementIf implem
     @Reflectable @NoArgsConstructor
     @Data @EqualsAndHashCode(callSuper = true)
     @JsonTypeName("run.fcli-for-each")
+    @SampleYamlSnippets({ActionStepRunFcliEntry.SAMPLE_SNIPPET_FOR_EACH})
     public static final class ActionStepFcliForEachDescriptor extends AbstractActionElementForEachRecord {
         protected final void _postLoad(Action action) {}
     }

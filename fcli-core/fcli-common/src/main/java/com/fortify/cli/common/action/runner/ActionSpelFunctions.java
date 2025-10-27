@@ -27,17 +27,12 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jgit.lib.Repository;
@@ -50,7 +45,6 @@ import org.jsoup.nodes.Element;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.parser.Parser;
 import org.jsoup.safety.Safelist;
-import org.springframework.integration.json.JsonPropertyAccessor.JsonNodeWrapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -62,7 +56,6 @@ import com.fortify.cli.common.action.helper.ActionLoaderHelper.ActionSource;
 import com.fortify.cli.common.action.helper.ActionLoaderHelper.ActionValidationHandler;
 import com.fortify.cli.common.action.schema.ActionSchemaDescriptorFactory;
 import com.fortify.cli.common.exception.FcliSimpleException;
-import com.fortify.cli.common.exception.FcliTechnicalException;
 import com.fortify.cli.common.json.FortifyTraceNodeHelper;
 import com.fortify.cli.common.json.JSONDateTimeConverter;
 import com.fortify.cli.common.json.JsonHelper;
@@ -90,81 +83,6 @@ public class ActionSpelFunctions {
             @SpelFunctionParam(name="path", desc="the path to resolve against the current working directory") String path)
     {
         return Path.of(".").resolve(path).toAbsolutePath().normalize().toString();
-    }
-    
-    @SpelFunction(cat=txt, returns="String consisting of the joined elements, separated by the given delimiter")
-    public static final String join(
-            @SpelFunctionParam(name="delimiter", desc="the delimiter to be used between each element") String delimiter,
-            @SpelFunctionParam(name="input", desc="the elements to join", type = "array") Object source)
-    {
-        switch (delimiter) {
-        case "\\n":
-            delimiter = "\n";
-            break;
-        case "\\t":
-            delimiter = "\t";
-            break;
-        }
-        Stream<?> stream = null;
-        if (source instanceof Collection) {
-            stream = ((Collection<?>) source).stream();
-        } else if (source instanceof ArrayNode) {
-            stream = JsonHelper.stream((ArrayNode) source);
-        }
-        return stream == null ? "" : stream.map(ActionSpelFunctionsHelper::toString).collect(Collectors.joining(delimiter));
-    }
-    
-    @SpelFunction(cat=txt, returns="String consisting of the joined elements separated by the given delimiter _if all elements are non-null_; otherwise `null`")
-    public static final String joinOrNull(
-            @SpelFunctionParam(name="delimiter", desc="the delimiter to be used between each element") String delimiter,
-            @SpelFunctionParam(name="input", desc="the elements to join") String... parts) 
-    {
-        if (parts == null || Arrays.asList(parts).stream().anyMatch(Objects::isNull)) {return null;}
-        return String.join(delimiter, parts);
-    }
-    
-    @SpelFunction(cat=txt, desc = "Returns a literal regex pattern string for the given input string, escaping any characters that have a special meaning in regular expressions.",
-            returns="The regex-quoted string")
-    public static final String regexQuote(
-            @SpelFunctionParam(name="input", desc="the string to be quoted") String s)
-    {
-        return Pattern.quote(s);
-    }
-    
-    @SpelFunction(cat=txt, desc = """
-            Replaces all occurrences in the input string based on regex patterns and replacement
-            values provided in the mapping object.
-            """,
-            returns="The input string with all replacements applied")
-    public static final String replaceAllFromRegExMap(
-            @SpelFunctionParam(name="input", desc="the input string on which to apply replacements") String s,
-            @SpelFunctionParam(name="replacements", desc="map containing regex patterns as keys and replacement strings as values", type = "map<string,string>") Object mappingObject)
-    {
-        var mappingNode = mappingObject instanceof ObjectNode ? (ObjectNode) mappingObject
-                : mappingObject instanceof JsonNodeWrapper ? ((JsonNodeWrapper<?>) mappingObject).getRealNode()
-                    : JsonHelper.getObjectMapper().valueToTree(mappingObject);
-        if (!mappingNode.isObject()) {
-            throw new FcliTechnicalException("replaceAllFromRegExMap must be called with Map or ObjectNode, actual type: "
-                    + mappingObject.getClass().getSimpleName());
-        }
-        var fields = ((ObjectNode) mappingNode).fields();
-        while (fields.hasNext()) {
-            var field = fields.next();
-            s = s.replaceAll(field.getKey(), field.getValue().asText());
-        }
-        return s;
-    }
-    
-    @SpelFunction(cat=txt, desc = "Generates a numbered list from the given list of elements.",
-            returns="Numbered list of input elements, each on a new line") 
-    public static final String numberedList(
-            @SpelFunctionParam(name="input", desc="the list of elements to be numbered and joined") List<Object> elts)
-    {
-        StringBuilder builder = new StringBuilder();
-        for (var i = 0; i < elts.size(); i++) {
-            builder.append(i + 1).append(". ").append(elts.get(i)).append('\n');
-        }
-        return builder.toString();
     }
     
     @SpelFunction(cat=workflow, desc = "Throws an error with the given message if the first argument evaluates to true.",
@@ -756,16 +674,6 @@ public class ActionSpelFunctions {
     }
     
     private static final class ActionSpelFunctionsHelper {
-        private static final String toString(Object o) {
-            if ( o==null ) {
-                return "";
-            } else if ( o instanceof JsonNode ) {
-                return ((JsonNode)o).asText();
-            } else {
-                return o.toString();
-            }
-        }
-        
         private static final String envOrDefault(String prefix, String suffix, String defaultValue) {
             var envName = String.format("%s_%s", prefix, suffix).toUpperCase().replace('-', '_');
             var envValue = EnvHelper.env(envName);

@@ -32,12 +32,12 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Define log masking settings.")
 @SampleYamlSnippets({"""
         config:
-        mask.env-vars:
+          mask.env-vars:
             SOME_PASSWORD:
-            sensitivity: high
+              sensitivity: high
         ""","""
         cli.options:
-        pwd:
+          pwd:
             names: -p,--password
             mask: {sensitivity: high}
         """})

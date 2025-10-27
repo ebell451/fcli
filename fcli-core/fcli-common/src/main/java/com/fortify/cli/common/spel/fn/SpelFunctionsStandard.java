@@ -21,14 +21,26 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.integration.json.JsonPropertyAccessor.JsonNodeWrapper;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.formkiq.graalvm.annotations.Reflectable;
 import com.fortify.cli.common.crypto.helper.EncryptionHelper;
 import com.fortify.cli.common.exception.FcliSimpleException;
+import com.fortify.cli.common.exception.FcliTechnicalException;
+import com.fortify.cli.common.json.JsonHelper;
 import com.fortify.cli.common.spel.fn.descriptor.annotation.SpelFunction;
 import com.fortify.cli.common.spel.fn.descriptor.annotation.SpelFunctionParam;
 import com.fortify.cli.common.util.DateTimePeriodHelper;
@@ -86,6 +98,81 @@ public class SpelFunctionsStandard {
             @SpelFunctionParam(name="maxLength", desc="the maximum length of the result string, must be at least 4") int maxLength)
     {
         return StringUtils.abbreviate(s, maxLength);
+    }
+    
+    @SpelFunction(cat=txt, returns="String consisting of the joined elements, separated by the given delimiter")
+    public static final String join(
+            @SpelFunctionParam(name="delimiter", desc="the delimiter to be used between each element") String delimiter,
+            @SpelFunctionParam(name="input", desc="the elements to join", type = "array") Object source)
+    {
+        switch (delimiter) {
+        case "\\n":
+            delimiter = "\n";
+            break;
+        case "\\t":
+            delimiter = "\t";
+            break;
+        }
+        Stream<?> stream = null;
+        if (source instanceof Collection) {
+            stream = ((Collection<?>) source).stream();
+        } else if (source instanceof ArrayNode) {
+            stream = JsonHelper.stream((ArrayNode) source);
+        }
+        return stream == null ? "" : stream.map(SpelFunctionsStandard::toString).collect(Collectors.joining(delimiter));
+    }
+    
+    @SpelFunction(cat=txt, returns="String consisting of the joined elements separated by the given delimiter _if all elements are non-null_; otherwise `null`")
+    public static final String joinOrNull(
+            @SpelFunctionParam(name="delimiter", desc="the delimiter to be used between each element") String delimiter,
+            @SpelFunctionParam(name="input", desc="the elements to join") String... parts) 
+    {
+        if (parts == null || Arrays.asList(parts).stream().anyMatch(Objects::isNull)) {return null;}
+        return String.join(delimiter, parts);
+    }
+    
+    @SpelFunction(cat=txt, desc = "Returns a literal regex pattern string for the given input string, escaping any characters that have a special meaning in regular expressions.",
+            returns="The regex-quoted string")
+    public static final String regexQuote(
+            @SpelFunctionParam(name="input", desc="the string to be quoted") String s)
+    {
+        return Pattern.quote(s);
+    }
+    
+    @SpelFunction(cat=txt, desc = """
+            Replaces all occurrences in the input string based on regex patterns and replacement
+            values provided in the mapping object.
+            """,
+            returns="The input string with all replacements applied")
+    public static final String replaceAllFromRegExMap(
+            @SpelFunctionParam(name="input", desc="the input string on which to apply replacements") String s,
+            @SpelFunctionParam(name="replacements", desc="map containing regex patterns as keys and replacement strings as values", type = "map<string,string>") Object mappingObject)
+    {
+        var mappingNode = mappingObject instanceof ObjectNode ? (ObjectNode) mappingObject
+                : mappingObject instanceof JsonNodeWrapper ? ((JsonNodeWrapper<?>) mappingObject).getRealNode()
+                    : JsonHelper.getObjectMapper().valueToTree(mappingObject);
+        if (!mappingNode.isObject()) {
+            throw new FcliTechnicalException("replaceAllFromRegExMap must be called with Map or ObjectNode, actual type: "
+                    + mappingObject.getClass().getSimpleName());
+        }
+        var fields = ((ObjectNode) mappingNode).fields();
+        while (fields.hasNext()) {
+            var field = fields.next();
+            s = s.replaceAll(field.getKey(), field.getValue().asText());
+        }
+        return s;
+    }
+    
+    @SpelFunction(cat=txt, desc = "Generates a numbered list from the given list of elements.",
+            returns="Numbered list of input elements, each on a new line") 
+    public static final String numberedList(
+            @SpelFunctionParam(name="input", desc="the list of elements to be numbered and joined") List<Object> elts)
+    {
+        StringBuilder builder = new StringBuilder();
+        for (var i = 0; i < elts.size(); i++) {
+            builder.append(i + 1).append(". ").append(elts.get(i)).append('\n');
+        }
+        return builder.toString();
     }
 
     @SpelFunction(cat=fcli, returns="`true` if debug logging is enabled; `false` otherwise")
@@ -196,5 +283,15 @@ public class SpelFunctionsStandard {
             @SpelFunctionParam(name="input", desc="the encrypted string to decrypt") String s)
     {
         return EncryptionHelper.decrypt(s);
+    }
+    
+    private static final String toString(Object o) {
+        if ( o==null ) {
+            return "";
+        } else if ( o instanceof JsonNode ) {
+            return ((JsonNode)o).asText();
+        } else {
+            return o.toString();
+        }
     }
 }

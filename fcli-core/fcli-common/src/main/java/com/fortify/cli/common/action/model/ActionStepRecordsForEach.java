@@ -40,10 +40,10 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Repeat the steps listed in the `do` block for each record provided by the `from` instruction.")
 @SampleYamlSnippets("""
         steps:
-        - records.for-each:
-            from: ${collection}
-            record.var-name: currentRecord
-            do:
+          - records.for-each:
+              from: ${collection}
+              record.var-name: currentRecord
+              do:
                 - log.debug: ${currentRecord}
                 - ...
         """)

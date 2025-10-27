@@ -114,11 +114,12 @@ public abstract class AbstractActionAsciidocCommand extends AbstractRunnableComm
 
     @SneakyThrows
     private String getClasspathResourceAsString(String path) {
-        var is = this.getClass().getResourceAsStream(path);
-        if ( is==null ) {
-            throw new FcliBugException(String.format("Class path resource %s not found", path));
+        try ( var is = this.getClass().getResourceAsStream(path) ) {
+            if ( is==null ) {
+                throw new FcliBugException(String.format("Class path resource %s not found", path));
+            }
+            return String.format("\n----\n%s\n----\n", IOUtils.toString(is, StandardCharsets.UTF_8));
         }
-        return String.format("\n----\n%s\n----\n", IOUtils.toString(is, StandardCharsets.UTF_8));
     }
     
     private final String generateOptionsSection(Action action) {

@@ -70,11 +70,12 @@ public abstract class AbstractActionHelpCommand extends AbstractRunnableCommand 
 
     @SneakyThrows
     private String getClasspathResourceAsString(String path) {
-        var is = this.getClass().getResourceAsStream(path);
-        if ( is==null ) {
-            throw new FcliBugException(String.format("Class path resource %s not found", path));
+        try ( var is = this.getClass().getResourceAsStream(path) ) {
+            if ( is==null ) {
+                throw new FcliBugException(String.format("Class path resource %s not found", path));
+            }
+            return IOUtils.toString(is, StandardCharsets.UTF_8);
         }
-        return IOUtils.toString(is, StandardCharsets.UTF_8);
     }
 
     private final String getMetadata(Action action) {
@@ -95,7 +96,8 @@ public abstract class AbstractActionHelpCommand extends AbstractRunnableCommand 
         }
         switch (signatureStatus) {
         case NO_PUBLIC_KEY: 
-            data.put("Required public key", StringUtils.defaultIfBlank(signatureDescriptor.getPublicKeyFingerprint(), "N/A"));
+            var publicKeyFingerprint = signatureDescriptor==null ? null : signatureDescriptor.getPublicKeyFingerprint();
+            data.put("Required public key", StringUtils.defaultIfBlank(publicKeyFingerprint, "N/A"));
             break;
         case VALID:
             data.put("Certified by", StringUtils.defaultIfBlank(publicKeyDescriptor.getName(), 

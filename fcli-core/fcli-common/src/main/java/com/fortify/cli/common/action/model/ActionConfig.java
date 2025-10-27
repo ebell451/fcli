@@ -33,8 +33,8 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Define configuration settings for this action.")
 @SampleYamlSnippets("""
         config:
-        rest.target.default: fod
-        output: immediate
+          rest.target.default: fod
+          output: immediate
         """)
 public final class ActionConfig implements IActionElement {
     @JsonPropertyDescription("""

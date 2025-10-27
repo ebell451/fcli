@@ -12,6 +12,10 @@
  */
 package com.fortify.cli.util.all_commands.cli.mixin;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -95,8 +99,73 @@ public class AllCommandsCommandSelectorMixin {
         result.put("usageHeader", String.join("\n", spec.usageMessage().header()));
         result.set("aliases", Stream.of(spec.aliases()).map(TextNode::new).collect(JsonHelper.arrayNodeCollector()));
         result.put("aliasesString", Stream.of(spec.aliases()).collect(Collectors.joining(", ")));
+        var fullAliases = computeFullAliases(spec);
+        result.set("fullAliases", fullAliases.stream().map(TextNode::new).collect(JsonHelper.arrayNodeCollector()));
+        result.put("fullAliasesString", String.join(", ", fullAliases));
         result.set("options", spec.optionsMap().keySet().stream().map(TextNode::new).collect(JsonHelper.arrayNodeCollector()));
         result.put("optionsString", spec.optionsMap().keySet().stream().collect(Collectors.joining(", ")));
         return result;
+    }
+
+    /**
+     * Compute all possible full command aliases for the given {@link CommandSpec} by
+     * generating the cartesian product of primary names + aliases for every command
+     * in the hierarchy (root to leaf). The canonical command name (concatenation of
+     * primary names) is INCLUDED as the first element if there is at least one alias
+     * somewhere in the hierarchy; if there are no aliases anywhere, an empty list is
+     * returned.
+     * 
+     * Example: For hierarchy fcli -> ssc -> appversion (alias: av) -> list (alias: ls),
+     * this method returns (order preserved): ["fcli ssc appversion list", "fcli ssc appversion ls",
+     * "fcli ssc av list", "fcli ssc av ls"].
+     */
+    private static final List<String> computeFullAliases(CommandSpec leafSpec) {
+        // Build ordered list of specs from root to leaf
+        List<CommandSpec> hierarchy = new ArrayList<>();
+        for (CommandSpec current = leafSpec; current != null; current = current.parent()) {
+            hierarchy.add(0, current);
+        }
+        // Collect possible names (primary + aliases) for each spec in hierarchy
+        List<List<String>> hierarchyNames = new ArrayList<>();
+        boolean hasAnyAlias = false;
+        for (CommandSpec cs : hierarchy) {
+            List<String> names = new ArrayList<>();
+            names.add(cs.name());
+            for (String a : cs.aliases()) {
+                if (!a.equals(cs.name())) { // avoid duplicate of primary name
+                    names.add(a);
+                    hasAnyAlias = true;
+                }
+            }
+            hierarchyNames.add(names);
+        }
+        if (!hasAnyAlias) { // No aliases anywhere => no full alias combinations
+            return List.of();
+        }
+        // Cartesian product
+        Set<String> combinations = new LinkedHashSet<>();
+        buildCombinations(hierarchyNames, 0, new ArrayList<>(), combinations);
+        // Ensure canonical (all primary names) appears first if present
+        String canonical = hierarchy.stream().map(CommandSpec::name).collect(Collectors.joining(" "));
+        if (combinations.remove(canonical)) {
+            // Re-insert at beginning by creating new list
+            List<String> ordered = new ArrayList<>();
+            ordered.add(canonical);
+            ordered.addAll(combinations);
+            return ordered;
+        }
+        return new ArrayList<>(combinations);
+    }
+
+    private static final void buildCombinations(List<List<String>> hierarchyNames, int index, List<String> current, Set<String> out) {
+        if (index == hierarchyNames.size()) {
+            out.add(String.join(" ", current));
+            return;
+        }
+        for (String name : hierarchyNames.get(index)) {
+            current.add(name);
+            buildCombinations(hierarchyNames, index + 1, current, out);
+            current.remove(current.size() - 1);
+        }
     }
 }

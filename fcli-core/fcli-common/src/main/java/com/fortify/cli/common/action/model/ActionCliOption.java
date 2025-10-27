@@ -35,11 +35,11 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Define command-line options supported by this action.")
 @SampleYamlSnippets("""
         cli.options:
-        file: # Can be referenced through ${cli.file} in action steps
+          file: # Can be referenced through ${cli.file} in action steps
             names: -f,--file
             description: Output file name
             required: false
-            defaultValue: somefile.txt
+            default: somefile.txt
         """)
 public final class ActionCliOption implements IActionElement, IMapKeyAware<String> {
     @JsonIgnore private String key;

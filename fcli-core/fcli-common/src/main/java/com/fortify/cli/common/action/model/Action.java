@@ -89,7 +89,7 @@ public class Action implements IActionElement {
     @JsonPropertyDescription("""
         Required object: Action usage help, providing action usage instructions for users of this action. For \
         example, this information may be included in action documentation, or can be viewed by users through \
-        the 'fcli * action help' command.
+        the `fcli * action help <action>` command.
         """)
     @SampleYamlSnippets(copyFrom = ActionUsage.class)
     @JsonProperty(value = "usage", required = true) private ActionUsage usage;
@@ -128,14 +128,14 @@ public class Action implements IActionElement {
         """)
     @SampleYamlSnippets("""
         formatters:
-        plainText: |
+          plainText: |
             This is formatted plain text, with variable ${varName}.
-        structured:
+          structured:
             prop1: Some text
             prop2: Hello ${name}!
             prop3:
-            nestedProp1: xyz
-            nestedProp2: ${varName}    
+              nestedProp1: xyz
+              nestedProp2: ${varName}    
         """)
     @JsonProperty(value = "formatters", required = false) private Map<String, JsonNode> formatters = Collections.emptyMap();
     

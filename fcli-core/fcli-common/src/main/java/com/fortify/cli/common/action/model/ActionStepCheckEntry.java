@@ -44,8 +44,8 @@ import lombok.NoArgsConstructor;
 @JsonClassDescription("Define a (policy) check to be evaluated.")
 @SampleYamlSnippets("""
         steps:
-        - check:
-            MY_CHECK:
+          - check:
+              MY_CHECK:
                 failIf: ${condition}
                 ifSkipped: PASS
         """)
