@@ -11,6 +11,7 @@ config:
   rest.target.default: ssc
   run.fcli.status.log.default: true    # By default, we log all exit statuses
   run.fcli.status.check.default: true
+  mcp: exclude # Currently requires sensitive Debricked access token to be specified, so exclude from MCP tools
 
 # NOTE: When updating any options, ci action may also need to be updated
 cli.options:
