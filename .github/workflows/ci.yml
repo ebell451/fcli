@@ -279,6 +279,9 @@ jobs:
     name: Trigger functional tests
     needs: [build, native_linux, native_mac, native_win, combine-artifacts]
     runs-on: ubuntu-latest
+    # TODO Also run on pull requests, but command below fails with (for example):
+    #  could not create workflow dispatch event: HTTP 422: No ref found for: refs/pull/849/merge (https://api.github.com/repos/fortify/fcli/actions/workflows/62959663/dispatches)
+    if: github.event_name != 'pull_request'
     steps:
       # Previously we had a workflow_run trigger on functional-tests.yaml, but:
       #  - This approach allows for starting functional tests a bit earlier (no need to wait for Docker builds)
@@ -392,10 +395,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-        # TODO Also run on pull requests, but command below fails with (for example):
-        #  could not create workflow dispatch event: HTTP 422: No ref found for: refs/pull/849/merge (https://api.github.com/repos/fortify/fcli/actions/workflows/62959663/dispatches)
       - name: PROD - Publish semantic release ${{ matrix.semantic_version }}
-        if: github.event_name != 'pull_request'
         run: |
           gh release delete ${{ matrix.semantic_version }} -y || true
           gh release create ${{ matrix.semantic_version }} -t "${{ matrix.semantic_version }}" -n "Semantic version release for [${{ needs.build.outputs.release_tag }}](https://github.com/fortify/fcli/releases/tag/${{ needs.build.outputs.release_tag }})" --verify-tag --latest=false
