@@ -75,6 +75,11 @@ jobs:
           else 
             echo "Tag ${tag} does not exist, no development release will be published"
           fi 
+          
+      - name: PR - Define release info
+        if: github.event_name == 'pull_request' && !env.DO_PROD_RELEASE && !env.DO_RELEASE
+        run: |
+          echo DO_BUILD=true >> $GITHUB_ENV # Do a build with default settings for PRs
       
       - name: Build release ${{env.RELEASE_VERSION}}
         if: env.DO_BUILD
