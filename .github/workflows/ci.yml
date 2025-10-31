@@ -392,7 +392,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+        # TODO Also run on pull requests, but command below fails with (for example):
+        #  could not create workflow dispatch event: HTTP 422: No ref found for: refs/pull/849/merge (https://api.github.com/repos/fortify/fcli/actions/workflows/62959663/dispatches)
       - name: PROD - Publish semantic release ${{ matrix.semantic_version }}
+        if: github.event_name != 'pull_request'
         run: |
           gh release delete ${{ matrix.semantic_version }} -y || true
           gh release create ${{ matrix.semantic_version }} -t "${{ matrix.semantic_version }}" -n "Semantic version release for [${{ needs.build.outputs.release_tag }}](https://github.com/fortify/fcli/releases/tag/${{ needs.build.outputs.release_tag }})" --verify-tag --latest=false
