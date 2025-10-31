@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.13.0](https://github.com/fortify/fcli/compare/v3.12.0...v3.13.0) (2025-10-31)
+
+
+### Features
+
+* `fcli license ncd-report`: Add support for Azure DevOps (see [#299](https://github.com/fortify/fcli/issues/299)) ([bb0b9b9](https://github.com/fortify/fcli/commit/bb0b9b934522129a72e4f29f6f255788f11c90bd))
+* `fcli ssc appversion create`: If there's only a single issue template makred as 'in use', this template will now be considered as the default template if no default template is explicitly configured in SSC ([1a865d7](https://github.com/fortify/fcli/commit/1a865d77183e598b4105ceaec54a4b44fc1fa1e1))
+* Add `bulkaudit` SSC action for automated SAST Aviator batch auditing of SSC application versions ([2b9391d](https://github.com/fortify/fcli/commit/2b9391d6d69fc744c01716eeb924be5fe0cd0da7))
+* FoD `ci` action: Add support for new scan-agnostic `DO_WAIT` environment variable & deprecate `DO_SAST_WAIT` ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
+* SSC `ci` action: Add support for new scan-agnostic `DO_WAIT` environment variable & deprecate `DO_SAST_WAIT` ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
+* SSC `ci` action: Incorporate `debricked-scan` action to allow for running both SAST & Debricked SCA scan ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
+* SSC `debricked-scan` action: New action for running a Debricked scan and importing results to SSC ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
+
+
+### Bug Fixes
+
+* `fcli aviator * apply-remediations`: Fix `InvalidPathException` for quoted paths ([848b97e](https://github.com/fortify/fcli/commit/848b97e4817f1748c9ce1a83a4d435bec022521e))
+* `fcli aviator ssc audit`: Automatically refresh SSC metrics if necessary before auditing ([2b9391d](https://github.com/fortify/fcli/commit/2b9391d6d69fc744c01716eeb924be5fe0cd0da7))
+* `fcli fod session login`: Ignore `--tenant` when authenticating with client credentials ([7014b3c](https://github.com/fortify/fcli/commit/7014b3cae5e59450bccb26fd179b456028146c5f))
+
 ## [3.12.0](https://github.com/fortify/fcli/compare/v3.11.0...v3.12.0) (2025-10-27)
 
 
