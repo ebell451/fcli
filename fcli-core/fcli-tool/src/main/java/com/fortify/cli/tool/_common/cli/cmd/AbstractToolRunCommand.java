@@ -13,9 +13,12 @@
 package com.fortify.cli.tool._common.cli.cmd;
 
 import java.io.File;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Scanner;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -80,11 +83,32 @@ public abstract class AbstractToolRunCommand extends AbstractRunnableCommand {
         var pb = new ProcessBuilder()
                 .command(fullCmd)
                 .directory(new File(workDir))
-                .inheritIO();
+                // .inheritIO(); 
+                // Can't use inheritIO as this as it may inherit original stdout/stderr, rather than
+                // those created by OutputHelper.OutputType (for example through FcliCommandExecutor).
+                // Instead, we use pipes and manually copy the output to current System.out/System.err.
+                // This fixes for example https://github.com/fortify/fcli/issues/859.
+                .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                .redirectOutput(ProcessBuilder.Redirect.PIPE)
+                .redirectError(ProcessBuilder.Redirect.PIPE);
         updateProcessBuilder(pb);
         var process = pb.start();
+        inheritIO(process.getInputStream(), System.out);
+        inheritIO(process.getErrorStream(), System.err);
         process.waitFor();
         return process.exitValue();
+    }
+    
+    private static void inheritIO(final InputStream src, final PrintStream dest) {
+        new Thread(new Runnable() {
+            public void run() {
+                try ( var sc = new Scanner(src) ) {
+                    while (sc.hasNextLine()) {
+                        dest.println(sc.nextLine());
+                    }
+                }
+            }
+        }).start();
     }
 
     private final ToolInstallationDescriptor getToolInstallationDescriptor() {
