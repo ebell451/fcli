@@ -18,9 +18,9 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Scanner;
 import java.util.stream.Stream;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +32,7 @@ import com.fortify.cli.tool._common.helper.ToolInstallationDescriptor;
 import com.fortify.cli.tool.definitions.helper.ToolDefinitionsHelper;
 
 import lombok.Getter;
+import lombok.SneakyThrows;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
@@ -101,12 +102,9 @@ public abstract class AbstractToolRunCommand extends AbstractRunnableCommand {
     
     private static void inheritIO(final InputStream src, final PrintStream dest) {
         new Thread(new Runnable() {
+            @SneakyThrows
             public void run() {
-                try ( var sc = new Scanner(src) ) {
-                    while (sc.hasNextLine()) {
-                        dest.println(sc.nextLine());
-                    }
-                }
+                IOUtils.copy(src, dest);
             }
         }).start();
     }
