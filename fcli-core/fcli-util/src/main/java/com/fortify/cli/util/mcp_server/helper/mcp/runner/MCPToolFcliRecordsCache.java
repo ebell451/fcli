@@ -47,6 +47,20 @@ public class MCPToolFcliRecordsCache {
         }
     }
     
+    public final void put(String fullCmd, MCPToolResultRecords records) {
+        if ( records==null ) { return; }
+        synchronized(cache) {
+            cache.put(fullCmd, new CacheEntry(records));
+        }
+    }
+    
+    public final MCPToolResultRecords getCached(String fullCmd) {
+        synchronized(cache) {
+            var entry = cache.get(fullCmd);
+            return entry==null || entry.isExpired() ? null : entry.getFullResult();
+        }
+    }
+    
     @Data @RequiredArgsConstructor
     private static final class CacheEntry {
         private final MCPToolResultRecords fullResult;

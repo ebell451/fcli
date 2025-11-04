@@ -96,7 +96,15 @@ public abstract class AbstractToolRunCommand extends AbstractRunnableCommand {
         var process = pb.start();
         inheritIO(process.getInputStream(), System.out);
         inheritIO(process.getErrorStream(), System.err);
-        process.waitFor();
+        try {
+            process.waitFor();
+        } catch ( InterruptedException ie ) {
+            // Best-effort kill if job cancellation interrupted this thread
+            try { process.destroy(); } catch ( Exception ignore ) {}
+            try { process.destroyForcibly(); } catch ( Exception ignore ) {}
+            Thread.currentThread().interrupt();
+            throw ie; // Propagate so upstream job manager can mark cancelled
+        }
         return process.exitValue();
     }
     

@@ -12,13 +12,17 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
 import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Model.CommandSpec;
 
 /**
@@ -31,13 +35,36 @@ import picocli.CommandLine.Model.CommandSpec;
  *
  * @author Ruud Senden
  */
-@RequiredArgsConstructor
 public final class MCPToolFcliRunnerRecords extends AbstractMCPToolFcliRunner {
     @Getter private final MCPToolArgHandlers toolSpecArgHelper;
     @Getter private final CommandSpec commandSpec;
+    public MCPToolFcliRunnerRecords(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager jobManager) {
+        super(jobManager);
+        this.toolSpecArgHelper = toolSpecArgHelper;
+        this.commandSpec = commandSpec;
+    }
     
     @Override
     protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
         return MCPToolFcliRunnerHelper.collectRecords(fullCmd, getCommandSpec()).asCallToolResult();
+    }
+
+    @Override
+    public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
+    final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")).trim();
+        var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
+        try {
+            if ( jobManager==null ) { return execute(exchange, request, fullCmd); }
+            var records = new ArrayList<JsonNode>();
+            var counter = new AtomicInteger();
+            Callable<CallToolResult> callable = () -> {
+                var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, r->{ counter.incrementAndGet(); records.add(r); }, getCommandSpec());
+                return MCPToolResultRecords.from(result, records).asCallToolResult();
+            };
+            var progressStrategy = com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager.recordCounter(counter);
+            return jobManager.execute(exchange, toolName, callable, progressStrategy, true);
+        } catch ( Exception e ) {
+            return new CallToolResult(e.toString(), true);
+        }
     }
 }

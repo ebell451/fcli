@@ -18,7 +18,6 @@ import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Model.CommandSpec;
 /**
  * {@link IMCPToolRunner} implementation that returns plain text output of the fcli command
@@ -28,10 +27,14 @@ import picocli.CommandLine.Model.CommandSpec;
  *
  * @author Ruud Senden
  */
-@RequiredArgsConstructor
 public final class MCPToolFcliRunnerPlainText extends AbstractMCPToolFcliRunner {
     @Getter private final MCPToolArgHandlers toolSpecArgHelper;
     @Getter private final CommandSpec commandSpec;
+    public MCPToolFcliRunnerPlainText(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager jobManager) {
+        super(jobManager);
+        this.toolSpecArgHelper = toolSpecArgHelper;
+        this.commandSpec = commandSpec;
+    }
     
     @Override
     protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {

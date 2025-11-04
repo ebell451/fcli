@@ -12,14 +12,18 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
 import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
+import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine.Model.CommandSpec;
 
 /**
@@ -32,10 +36,13 @@ import picocli.CommandLine.Model.CommandSpec;
  *
  * @author Ruud Senden
  */
+@Slf4j
 abstract class AbstractMCPToolFcliRunner implements IMCPToolRunner {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractMCPToolFcliRunner.class);
     protected abstract CommandSpec getCommandSpec();
     protected abstract MCPToolArgHandlers getToolSpecArgHelper();
+    protected MCPJobManager jobManager;
+    protected AbstractMCPToolFcliRunner(MCPJobManager jobManager) { this.jobManager = jobManager; }
     
     /**
      * Build full fcli command to execute, based on MCP tool arguments from the given request
@@ -55,8 +62,15 @@ abstract class AbstractMCPToolFcliRunner implements IMCPToolRunner {
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
         var fullCmd = getFullCmd(request);
+        var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
         try {
-            return execute(exchange, request, fullCmd);
+            if ( jobManager==null ) {
+                return execute(exchange, request, fullCmd);
+            }
+            // Default (non-record) progress: ticking
+            AtomicInteger counter = new AtomicInteger();
+            var progressStrategy = MCPJobManager.ticking(counter);
+            return jobManager.execute(exchange, toolName, () -> execute(exchange, request, fullCmd), progressStrategy, true);
         } catch ( Exception e ) {
             LOG.error("Exception while running fcli command:\n\t"+fullCmd, e);
             return new CallToolResult(e.toString(), true);
