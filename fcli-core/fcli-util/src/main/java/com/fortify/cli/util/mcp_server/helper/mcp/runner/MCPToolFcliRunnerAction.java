@@ -14,6 +14,7 @@ package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import com.fortify.cli.common.action.model.Action;
@@ -51,8 +52,7 @@ public final class MCPToolFcliRunnerAction implements IMCPToolRunner {
             var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd, getActionCommandSpec());
             return MCPToolResultPlainText.from(result).asCallToolResult();
         };
-    if ( jobManager==null ) { try { return work.call(); } catch ( Exception e ) { return new CallToolResult(e.toString(), true); } }
-    return jobManager.execute(exchange, toolName, work, MCPJobManager.ticking(new java.util.concurrent.atomic.AtomicInteger()), true);
+        return jobManager.execute(exchange, toolName, work, MCPJobManager.ticking(new AtomicInteger()), true);
     }
     
     private String buildFullCmd(CallToolRequest request) {

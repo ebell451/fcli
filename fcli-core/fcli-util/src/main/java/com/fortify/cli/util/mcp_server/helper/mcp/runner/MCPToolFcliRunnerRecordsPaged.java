@@ -12,10 +12,7 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
-import java.util.ArrayList;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
-
+import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlerPaging;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
@@ -23,6 +20,7 @@ import io.modelcontextprotocol.server.McpSyncServerExchange;
 import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import picocli.CommandLine.Model.CommandSpec;
 
 /**
@@ -33,10 +31,11 @@ import picocli.CommandLine.Model.CommandSpec;
  *
  * @author Ruud Senden
  */
+@Slf4j
 public final class MCPToolFcliRunnerRecordsPaged extends AbstractMCPToolFcliRunner {
     @Getter private final MCPToolArgHandlers toolSpecArgHelper;
     @Getter private final CommandSpec commandSpec;
-    public MCPToolFcliRunnerRecordsPaged(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager jobManager) {
+    public MCPToolFcliRunnerRecordsPaged(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, MCPJobManager jobManager) {
         super(jobManager);
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;
@@ -47,35 +46,49 @@ public final class MCPToolFcliRunnerRecordsPaged extends AbstractMCPToolFcliRunn
         var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
         var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
         var limit = 20; // Fixed for now
-        var cached = MCPToolFcliRecordsCache.INSTANCE.getOrCollect(fullCmd, refresh, getCommandSpec());
+        var cached = jobManager.getRecordsCache().getOrCollect(fullCmd, refresh, getCommandSpec());
         return MCPToolResultRecordsPaged.from(cached, offset, limit).asCallToolResult();
     }
 
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
         final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")).trim();
-        var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
         var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
         var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
         var limit = 20; // Fixed for now
         try {
-            if ( jobManager==null ) { return execute(exchange, request, fullCmd); }
-            // If we already have cached records and not refreshing, return synchronously (no async job)
-            var cached = refresh?null:MCPToolFcliRecordsCache.INSTANCE.getCached(fullCmd);
+            // Return cached full result if available
+            var cached = refresh?null:jobManager.getRecordsCache().getCached(fullCmd);
             if ( cached!=null ) {
+                log.debug("Paged runner cached hit cmd='{}' offset={} limit={} total={}", fullCmd, offset, limit, cached.getRecords().size());
                 return MCPToolResultRecordsPaged.from(cached, offset, limit).asCallToolResult();
             }
-            var records = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
-            var counter = new AtomicInteger();
-            Callable<CallToolResult> callable = () -> {
-                var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, r->{ counter.incrementAndGet(); records.add(r); }, getCommandSpec());
-                var allRecords = MCPToolResultRecords.from(result, records);
-                if ( result.getExitCode()==0 ) { MCPToolFcliRecordsCache.INSTANCE.put(fullCmd, allRecords); }
-                return MCPToolResultRecordsPaged.from(allRecords, offset, limit).asCallToolResult();
-            };
-            var progressStrategy = com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager.recordCounter(counter);
-            return jobManager.execute(exchange, toolName, callable, progressStrategy, true);
+            // Get or start background collection
+            var inProg = jobManager.getRecordsCache().getOrStartBackground(fullCmd, refresh, getCommandSpec());
+            if ( inProg==null ) { // Means we had cached result but refresh requested & already collected synchronously
+                var full = jobManager.getRecordsCache().getCached(fullCmd);
+                return full==null ? new CallToolResult("No result", true) : MCPToolResultRecordsPaged.from(full, offset, limit).asCallToolResult();
+            }
+            var records = inProg.getRecords();
+            var requiredForHasMore = offset + limit + 1;
+            while ( records.size() < requiredForHasMore && !inProg.isCompleted() ) {
+                Thread.sleep(50);
+            }
+            var complete = inProg.isCompleted();
+            if ( complete ) {
+                var full = jobManager.getRecordsCache().getCached(fullCmd);
+                if ( full!=null ) {
+                    log.debug("Returning COMPLETE paged result cmd='{}' offset={} limit={} loaded={} total={}",
+                            fullCmd, offset, limit, records.size(), full.getRecords().size());
+                    return MCPToolResultRecordsPaged.from(full, offset, limit).asCallToolResult();
+                }
+                log.warn("Background collection completed without cache entry cmd='{}'", fullCmd);
+            }
+            log.debug("Returning PARTIAL paged result cmd='{}' offset={} limit={} loaded={} need>={} jobToken={}",
+                    fullCmd, offset, limit, records.size(), requiredForHasMore, inProg.getJobToken());
+            return MCPToolResultRecordsPaged.fromPartial(records, offset, limit, false, inProg.getJobToken()).asCallToolResult();
         } catch ( Exception e ) {
+            log.warn("Paged runner failed cmd='{}' offset={} limit={} error={}", fullCmd, offset, limit, e.toString());
             return new CallToolResult(e.toString(), true);
         }
     }

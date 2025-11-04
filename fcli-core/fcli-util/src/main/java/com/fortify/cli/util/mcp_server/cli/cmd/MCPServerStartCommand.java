@@ -150,11 +150,17 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
         public SyncToolSpecification createToolSpec() {
             return McpServerFeatures.SyncToolSpecification.builder().tool(createTool()).callHandler(createRunner()::run).build();
         }
-        private Tool createTool() { return Tool.builder().name(commandSpec.qualifiedName("_").replace('-', '_')).description(buildToolDescription()).inputSchema(toolSpecArgHelper.getSchema()).build(); }
+    private Tool createTool() { return Tool.builder().name(commandSpec.qualifiedName("_").replace('-', '_')).description(buildToolDescription()).inputSchema(toolSpecArgHelper.getSchema()).build(); }
         private String buildToolDescription() {
             var cmdHeader = commandSpec.commandLine().getHelp().header();
             var mcpToolDescription = FcliCommandSpecHelper.getMessageString(commandSpec, "mcp.description");
-            return StringUtils.isBlank(mcpToolDescription) ? cmdHeader : String.format("%s\n%s", cmdHeader, mcpToolDescription);
+            var base = StringUtils.isBlank(mcpToolDescription) ? cmdHeader : String.format("%s\n%s", cmdHeader, mcpToolDescription);
+            if ( toolSpecArgHelper.isPaged() ) {
+                // Append paging guidance for LLM/client
+                base = base + "\nPaging Guidance: This tool may return partial results if background record collection is still in progress. "
+                        + "When pagination.totalRecords is null, call the job tool 'fcli_"+module.toString().replace('-', '_')+"_mcp_job' with operation=wait and the pagination.jobToken value to finalize loading and obtain totalRecords & totalPages.";
+            }
+            return base;
         }
         private IMCPToolRunner createRunner() {
             if ( FcliCommandSpecHelper.canCollectRecords(commandSpec) ) {

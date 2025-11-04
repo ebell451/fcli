@@ -14,9 +14,6 @@ package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
@@ -38,10 +35,9 @@ import picocli.CommandLine.Model.CommandSpec;
  */
 @Slf4j
 abstract class AbstractMCPToolFcliRunner implements IMCPToolRunner {
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractMCPToolFcliRunner.class);
     protected abstract CommandSpec getCommandSpec();
     protected abstract MCPToolArgHandlers getToolSpecArgHelper();
-    protected MCPJobManager jobManager;
+    protected final MCPJobManager jobManager;
     protected AbstractMCPToolFcliRunner(MCPJobManager jobManager) { this.jobManager = jobManager; }
     
     /**
@@ -64,15 +60,12 @@ abstract class AbstractMCPToolFcliRunner implements IMCPToolRunner {
         var fullCmd = getFullCmd(request);
         var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
         try {
-            if ( jobManager==null ) {
-                return execute(exchange, request, fullCmd);
-            }
-            // Default (non-record) progress: ticking
+            // Always use job manager; assume injected non-null
             AtomicInteger counter = new AtomicInteger();
             var progressStrategy = MCPJobManager.ticking(counter);
             return jobManager.execute(exchange, toolName, () -> execute(exchange, request, fullCmd), progressStrategy, true);
         } catch ( Exception e ) {
-            LOG.error("Exception while running fcli command:\n\t"+fullCmd, e);
+            log.error("Exception while running fcli command:\n\t{}", fullCmd, e);
             return new CallToolResult(e.toString(), true);
         }
     }

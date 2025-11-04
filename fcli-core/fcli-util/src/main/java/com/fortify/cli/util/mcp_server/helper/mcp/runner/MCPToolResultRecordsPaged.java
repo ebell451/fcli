@@ -12,7 +12,6 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
-import java.util.Collections;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -32,35 +31,65 @@ import lombok.EqualsAndHashCode;
 @Data @EqualsAndHashCode(callSuper = false) @Builder
 @Reflectable
 public class MCPToolResultRecordsPaged extends AbstractMCPToolResult {
-    private final List<JsonNode> records;
-    private final PageInfo pagination;
-    private final String stderr;
-    private final int exitCode;
+    private final List<JsonNode> records;          // Page records
+    private final PageInfo pagination;             // Paging metadata
+    private final String stderr;                   // fcli stderr (empty for partial in-progress pages)
+    private final int exitCode;                    // fcli exit code (0 for partial until background completes)
     
+    /**
+     * Create a full (complete) paged result once all records have been collected.
+     */
     public static final MCPToolResultRecordsPaged from(MCPToolResultRecords plainResult, int offset, int limit) {
         var allRecords = plainResult.getRecords();
-        var pageInfo = PageInfo.from(allRecords.size(), offset, limit);
-        var endIndex = Math.min(pageInfo.getNextPageOffsetOrMaxInt(), pageInfo.getTotalRecords());
+        var pageInfo = PageInfo.complete(allRecords.size(), offset, limit);
+        var endIndexExclusive = Math.min(offset+limit, allRecords.size());
+        List<JsonNode> pageRecords = offset>=endIndexExclusive ? List.<JsonNode>of() : allRecords.subList(offset, endIndexExclusive);
         return builder()
             .exitCode(plainResult.getExitCode())
             .stderr(plainResult.getStderr())
-            .records(offset>endIndex ? Collections.emptyList() : allRecords.subList(offset, endIndex))
+            .records(pageRecords)
             .pagination(pageInfo)
             .build();
     }
     
-    @Data @Builder
+    /**
+     * Create a partial paged result while background collection is still running.
+     * totalRecords/totalPages/lastPageOffset are null until complete. hasMore is
+     * determined by presence of at least (offset+limit+1) loaded records.
+     * exitCode/stderr represent interim values (0 + empty) as underlying fcli
+     * process hasn't completed yet.
+     */
+    public static final MCPToolResultRecordsPaged fromPartial(List<JsonNode> loadedRecords, int offset, int limit, boolean complete, String jobToken) {
+        if ( complete ) { // Delegate to full builder for final consistency
+            return from(MCPToolResultRecords.builder().exitCode(0).stderr("").records(loadedRecords).build(), offset, limit);
+        }
+        var endIndexExclusive = Math.min(offset+limit, loadedRecords.size());
+        List<JsonNode> pageRecords = offset>=endIndexExclusive ? List.<JsonNode>of() : loadedRecords.subList(offset, endIndexExclusive);
+        var hasMore = loadedRecords.size() > offset+limit; // page size + 1 rule
+        var pageInfo = PageInfo.partial(offset, limit, hasMore).toBuilder().jobToken(jobToken).build();
+        return builder()
+            .exitCode(0) // Interim until full collection finishes
+            .stderr("")
+            .records(pageRecords)
+            .pagination(pageInfo)
+            .build();
+    }
+    
+    @Data @Builder(toBuilder = true)
     @Reflectable
     private static final class PageInfo {
-        private final int totalRecords;
-        private final int totalPages;
-        private final int currentOffset;
-        private final int currentLimit;
-        private final Integer nextPageOffset;
-        private final int lastPageOffset;
-        private final boolean hasMore;
+        private final Integer totalRecords;   // null if not complete
+        private final Integer totalPages;     // null if not complete
+        private final int currentOffset;      // requested offset
+        private final int currentLimit;       // requested limit
+        private final Integer nextPageOffset; // null if last page or incomplete without extra record
+        private final Integer lastPageOffset; // null if not complete
+        private final boolean hasMore;        // true if we have pageSize+1 loaded or final total indicates more
+        private final boolean complete;       // dataset fully loaded
+        private final String jobToken;        // optional: background job token (partial only)
+        private final String guidance;        // optional: message guiding client/LLM
         
-        private static final PageInfo from(int totalRecords, int offset, int limit) {
+        private static final PageInfo complete(int totalRecords, int offset, int limit) {
             var totalPages = (int)Math.ceil((double)totalRecords / (double)limit);
             var lastPageOffset = (totalPages - 1) * limit;
             var nextPageOffset = offset+limit;
@@ -73,12 +102,23 @@ public class MCPToolResultRecordsPaged extends AbstractMCPToolResult {
                 .hasMore(hasMore)
                 .totalRecords(totalRecords)
                 .totalPages(totalPages)
+                .complete(true)
+                .guidance("All records loaded; totals available.")
+                .build();
+        }
+        
+        private static final PageInfo partial(int offset, int limit, boolean hasMore) {
+            return PageInfo.builder()
+                .currentLimit(limit)
+                .currentOffset(offset)
+                .nextPageOffset(hasMore ? offset+limit : null)
+                .hasMore(hasMore)
+                .complete(false)
+                .guidance("Partial page; totals unavailable. Call job tool with the provided job_token (if present) using operation=wait to finalize loading for totalRecords/totalPages.")
                 .build();
         }
         
         @JsonIgnore
-        public final int getNextPageOffsetOrMaxInt() {
-            return nextPageOffset==null ? Integer.MAX_VALUE : nextPageOffset;
-        }
+        public final boolean isComplete() { return complete; }
     }
 }

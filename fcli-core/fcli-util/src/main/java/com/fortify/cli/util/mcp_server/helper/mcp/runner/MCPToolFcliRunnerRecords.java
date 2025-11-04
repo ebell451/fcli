@@ -17,6 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
 import io.modelcontextprotocol.server.McpSyncServerExchange;
@@ -38,7 +39,7 @@ import picocli.CommandLine.Model.CommandSpec;
 public final class MCPToolFcliRunnerRecords extends AbstractMCPToolFcliRunner {
     @Getter private final MCPToolArgHandlers toolSpecArgHelper;
     @Getter private final CommandSpec commandSpec;
-    public MCPToolFcliRunnerRecords(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager jobManager) {
+    public MCPToolFcliRunnerRecords(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, MCPJobManager jobManager) {
         super(jobManager);
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;
@@ -51,17 +52,16 @@ public final class MCPToolFcliRunnerRecords extends AbstractMCPToolFcliRunner {
 
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
-    final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")).trim();
+        final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")) .trim();
         var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
         try {
-            if ( jobManager==null ) { return execute(exchange, request, fullCmd); }
             var records = new ArrayList<JsonNode>();
             var counter = new AtomicInteger();
             Callable<CallToolResult> callable = () -> {
                 var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, r->{ counter.incrementAndGet(); records.add(r); }, getCommandSpec());
                 return MCPToolResultRecords.from(result, records).asCallToolResult();
             };
-            var progressStrategy = com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager.recordCounter(counter);
+            var progressStrategy = MCPJobManager.recordCounter(counter);
             return jobManager.execute(exchange, toolName, callable, progressStrategy, true);
         } catch ( Exception e ) {
             return new CallToolResult(e.toString(), true);

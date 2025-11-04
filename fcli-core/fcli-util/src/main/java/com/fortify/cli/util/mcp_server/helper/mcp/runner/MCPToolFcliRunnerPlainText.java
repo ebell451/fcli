@@ -12,6 +12,7 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
+import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
 import io.modelcontextprotocol.server.McpSyncServerExchange;
@@ -30,7 +31,7 @@ import picocli.CommandLine.Model.CommandSpec;
 public final class MCPToolFcliRunnerPlainText extends AbstractMCPToolFcliRunner {
     @Getter private final MCPToolArgHandlers toolSpecArgHelper;
     @Getter private final CommandSpec commandSpec;
-    public MCPToolFcliRunnerPlainText(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager jobManager) {
+    public MCPToolFcliRunnerPlainText(MCPToolArgHandlers toolSpecArgHelper, CommandSpec commandSpec, MCPJobManager jobManager) {
         super(jobManager);
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;

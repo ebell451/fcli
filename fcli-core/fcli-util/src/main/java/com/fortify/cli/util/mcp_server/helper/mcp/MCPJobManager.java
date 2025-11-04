@@ -13,6 +13,9 @@
 package com.fortify.cli.util.mcp_server.helper.mcp;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -21,12 +24,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fortify.cli.util.mcp_server.helper.mcp.runner.MCPToolFcliRecordsCache;
 
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpServerFeatures.SyncToolSpecification;
@@ -56,6 +61,7 @@ public class MCPJobManager {
     private final long progressIntervalMillis;
     private final Map<String, JobExecution> jobs = new ConcurrentHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
+    private final MCPToolFcliRecordsCache recordsCache;
 
     public MCPJobManager(String moduleName, int workThreads, int progressThreads, long safeReturnMillis, long progressIntervalMillis) {
         this.moduleName = moduleName;
@@ -63,9 +69,12 @@ public class MCPJobManager {
         this.progressExecutor = Executors.newScheduledThreadPool(progressThreads);
         this.safeReturnMillis = safeReturnMillis;
         this.progressIntervalMillis = progressIntervalMillis;
+        this.recordsCache = new MCPToolFcliRecordsCache(this);
         log.info("Initialized MCPJobManager for module={} workThreads={} progressThreads={} safeReturnMillis={} progressIntervalMillis={}",
                 moduleName, workThreads, progressThreads, safeReturnMillis, progressIntervalMillis);
     }
+
+    public MCPToolFcliRecordsCache getRecordsCache() { return recordsCache; }
 
     // Public API for runners
     public CallToolResult execute(McpSyncServerExchange exchange, String toolName, Callable<CallToolResult> work, ProgressStrategy progressStrategy, boolean sendNotifications) {
@@ -134,6 +143,47 @@ public class MCPJobManager {
         return new CallToolResult(n.toPrettyString(), false);
     }
 
+    /**
+     * Track an existing future (background work started elsewhere) as a job so the
+     * fcli_<module>_mcp_job tool can report status|wait|cancel. The provided progressStrategy
+     * is sampled periodically for progress updates. Completion of the future sets a final
+     * tool_result summary; cancellation interrupts progress sampling and marks the job cancelled.
+     *
+     * Returns job token immediately; does not wait for safeReturnMillis.
+     */
+    public String trackFuture(String toolName, CompletableFuture<?> future, ProgressStrategy progressStrategy) {
+        String token = UUID.randomUUID().toString();
+        JobExecution exec = new JobExecution(token, toolName, progressStrategy);
+        jobs.put(token, exec);
+        exec.status = JobStatus.RUNNING;
+        exec.startTime = Instant.now();
+        log.info("Tracking external future as job {} tool {}", token, toolName);
+        // Schedule progress sampling
+        exec.progressTask = progressExecutor.scheduleAtFixedRate(() -> {
+            try { exec.progress.set(progressStrategy.updateAndGetProgress()); }
+            catch ( Exception e ) { log.trace("Progress strategy error: {}", e.toString()); }
+        }, progressIntervalMillis, progressIntervalMillis, TimeUnit.MILLISECONDS);
+        // When future completes, finalize job
+        future.whenComplete((res, t) -> {
+            if ( t != null ) {
+                exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.FAILED;
+                exec.result = buildErrorResult(token, toolName, t.getMessage());
+            } else {
+                exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.COMPLETED;
+                ObjectNode n = mapper.createObjectNode();
+                n.put("status", exec.status.name().toLowerCase());
+                n.put("job_token", token);
+                n.put("tool", toolName);
+                n.put("message", exec.status==JobStatus.COMPLETED?"background collection completed":"background collection ended");
+                exec.result = new CallToolResult(n.toPrettyString(), false);
+            }
+            exec.endTime = Instant.now();
+            exec.cleanup();
+            log.info("Tracked future finished job {} status {}", token, exec.status);
+        });
+        return token;
+    }
+
     public SyncToolSpecification getJobToolSpecification() {
         return McpServerFeatures.SyncToolSpecification.builder()
             .tool(Tool.builder()
@@ -154,18 +204,18 @@ public class MCPJobManager {
         // Build a minimal JSON schema describing accepted arguments. Both fields are required.
         // operation: enum status|wait|cancel
         // job_token: string identifying the job
-        var properties = new java.util.LinkedHashMap<String,Object>();
-        var required = new java.util.ArrayList<String>();
-        var opSchema = new java.util.LinkedHashMap<String,Object>();
+        var properties = new LinkedHashMap<String,Object>();
+        var required = new ArrayList<String>();
+        var opSchema = new LinkedHashMap<String,Object>();
         opSchema.put("type", "string");
-        opSchema.put("enum", java.util.List.of("status","wait","cancel"));
+        opSchema.put("enum", List.of("status","wait","cancel"));
         properties.put("operation", opSchema);
         required.add("operation");
-        var tokenSchema = new java.util.LinkedHashMap<String,Object>();
+        var tokenSchema = new LinkedHashMap<String,Object>();
         tokenSchema.put("type", "string");
         properties.put("job_token", tokenSchema);
         required.add("job_token");
-        return new JsonSchema("object", properties, required, false, new java.util.LinkedHashMap<>(), new java.util.LinkedHashMap<>());
+        return new JsonSchema("object", properties, required, false, new LinkedHashMap<>(), new LinkedHashMap<>());
     }
 
     private CallToolResult handleJobOperation(String token, String op) {
@@ -240,7 +290,7 @@ public class MCPJobManager {
         volatile Instant endTime;
         volatile CompletableFuture<CallToolResult> future;
         volatile CallToolResult result;
-        volatile java.util.concurrent.ScheduledFuture<?> progressTask;
+    volatile ScheduledFuture<?> progressTask;
         volatile Integer total; // Optional total count for progress
         JobExecution(String token, String toolName, ProgressStrategy progressStrategy) {
             this.token = token; this.toolName = toolName; this.progressStrategy = progressStrategy; }
