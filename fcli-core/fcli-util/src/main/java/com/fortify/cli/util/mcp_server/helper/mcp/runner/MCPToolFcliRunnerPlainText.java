@@ -12,6 +12,9 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
 
@@ -21,10 +24,10 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import lombok.Getter;
 import picocli.CommandLine.Model.CommandSpec;
 /**
- * {@link IMCPToolRunner} implementation that returns plain text output of the fcli command
- * being executed in a structured JSON object as described by {@link MCPToolResultPlainText}.
- * This is commonly used to run fcli commands that don't output structured records, like 
- * 'fcli * action run' commands.
+ * IMCPToolRunner implementation for running regular fcli commands. Returns the command result
+ * being executed in a structured JSON object with stdout output.
+ * The command is expected to return stdout output which is collected and returned as-is
+ * in the 'stdout' field of the result JSON.
  *
  * @author Ruud Senden
  */
@@ -36,10 +39,23 @@ public final class MCPToolFcliRunnerPlainText extends AbstractMCPToolFcliRunner 
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;
     }
-    
+
     @Override
-    protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
-        var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd, getCommandSpec());
-        return MCPToolResultPlainText.from(result).asCallToolResult();
+    public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
+        try {
+            var fullCmd = getFullCmd(request);
+            var work = createCommandWork(fullCmd);
+            var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
+            return jobManager.execute(exchange, toolName, work, MCPJobManager.ticking(new AtomicInteger()), true);
+        } catch (Exception e) {
+            return MCPToolResult.fromError(e).asCallToolResult();
+        }
+    }
+    
+    private Callable<CallToolResult> createCommandWork(String fullCmd) {
+        return () -> {
+            var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd, commandSpec);
+            return MCPToolResult.fromPlainText(result).asCallToolResult();
+        };
     }
 }

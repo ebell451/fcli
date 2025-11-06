@@ -12,6 +12,9 @@
  */
 package com.fortify.cli.util.mcp_server.helper.mcp.runner;
 
+import java.util.List;
+import java.util.Optional;
+
 import com.fortify.cli.util.mcp_server.helper.mcp.MCPJobManager;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlerPaging;
 import com.fortify.cli.util.mcp_server.helper.mcp.arg.MCPToolArgHandlers;
@@ -25,8 +28,7 @@ import picocli.CommandLine.Model.CommandSpec;
 
 /**
  * {@link IMCPToolRunner} implementation that, given offset and limit, returns the requested set of 
- * records together with pagination data in a structured JSON object as described by {@link MCPToolResultRecordsPaged}, 
- * based on the full set of records as produced by the fcli command being executed.
+ * records together with pagination data in a structured JSON object.
  * This is commonly used to run fcli commands that may return a large number of records.
  *
  * @author Ruud Senden
@@ -40,57 +42,120 @@ public final class MCPToolFcliRunnerRecordsPaged extends AbstractMCPToolFcliRunn
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;
     }
-    
-    @Override
-    protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
-        var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
-        var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
-        var limit = 20; // Fixed for now
-        var cached = jobManager.getRecordsCache().getOrCollect(fullCmd, refresh, getCommandSpec());
-        return MCPToolResultRecordsPaged.from(cached, offset, limit).asCallToolResult();
-    }
 
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
-        final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")).trim();
-        var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
-        var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
-        var limit = 20; // Fixed for now
+        final var fullCmd = getFullCmd(request);
+        final var pageParams = PageParams.from(request);
+        
         try {
-            // Return cached full result if available
-            var cached = refresh?null:jobManager.getRecordsCache().getCached(fullCmd);
-            if ( cached!=null ) {
-                log.debug("Paged runner cached hit cmd='{}' offset={} limit={} total={}", fullCmd, offset, limit, cached.getRecords().size());
-                return MCPToolResultRecordsPaged.from(cached, offset, limit).asCallToolResult();
-            }
-            // Get or start background collection
-            var inProg = jobManager.getRecordsCache().getOrStartBackground(fullCmd, refresh, getCommandSpec());
-            if ( inProg==null ) { // Means we had cached result but refresh requested & already collected synchronously
-                var full = jobManager.getRecordsCache().getCached(fullCmd);
-                return full==null ? new CallToolResult("No result", true) : MCPToolResultRecordsPaged.from(full, offset, limit).asCallToolResult();
-            }
-            var records = inProg.getRecords();
-            var requiredForHasMore = offset + limit + 1;
-            while ( records.size() < requiredForHasMore && !inProg.isCompleted() ) {
-                Thread.sleep(50);
-            }
-            var complete = inProg.isCompleted();
-            if ( complete ) {
-                var full = jobManager.getRecordsCache().getCached(fullCmd);
-                if ( full!=null ) {
-                    log.debug("Returning COMPLETE paged result cmd='{}' offset={} limit={} loaded={} total={}",
-                            fullCmd, offset, limit, records.size(), full.getRecords().size());
-                    return MCPToolResultRecordsPaged.from(full, offset, limit).asCallToolResult();
-                }
-                log.warn("Background collection completed without cache entry cmd='{}'", fullCmd);
-            }
-            log.debug("Returning PARTIAL paged result cmd='{}' offset={} limit={} loaded={} need>={} jobToken={}",
-                    fullCmd, offset, limit, records.size(), requiredForHasMore, inProg.getJobToken());
-            return MCPToolResultRecordsPaged.fromPartial(records, offset, limit, false, inProg.getJobToken()).asCallToolResult();
-        } catch ( Exception e ) {
-            log.warn("Paged runner failed cmd='{}' offset={} limit={} error={}", fullCmd, offset, limit, e.toString());
-            return new CallToolResult(e.toString(), true);
+            return tryGetCachedResult(fullCmd, pageParams)
+                .or(() -> {
+                    try {
+                        return tryGetInProgressResult(fullCmd, pageParams);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted while waiting for records", e);
+                    }
+                })
+                .orElseThrow(() -> new IllegalStateException("No result path succeeded for: " + fullCmd));
+        } catch (Exception e) {
+            log.warn("Paged runner failed cmd='{}' offset={} limit={} error={}", 
+                fullCmd, pageParams.offset, pageParams.limit, e.toString());
+            return MCPToolResult.fromError(e).asCallToolResult();
         }
+    }
+    
+    private Optional<CallToolResult> tryGetCachedResult(String fullCmd, PageParams params) {
+        if (params.refresh) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(jobManager.getRecordsCache().getCached(fullCmd))
+            .map(cached -> {
+                log.debug("Cache hit cmd='{}' offset={} limit={} total={}", 
+                    fullCmd, params.offset, params.limit, cached.getRecords().size());
+                return MCPToolResult.fromCompletedPagedResult(cached, params.offset, params.limit).asCallToolResult();
+            });
+    }
+    
+    private Optional<CallToolResult> tryGetInProgressResult(String fullCmd, PageParams params) 
+            throws InterruptedException {
+        var inProgress = jobManager.getRecordsCache().getOrStartBackground(fullCmd, params.refresh, getCommandSpec());
+        
+        if (inProgress == null) {
+            return handleSyncCollectionCompleted(fullCmd, params);
+        }
+        
+        waitForSufficientRecords(inProgress, params);
+        
+        return checkForCompletedWithError(inProgress, fullCmd)
+            .or(() -> checkForCompletedSuccessfully(inProgress, fullCmd, params))
+            .or(() -> buildPartialPageResult(inProgress, fullCmd, params));
+    }
+    
+    private Optional<CallToolResult> handleSyncCollectionCompleted(String fullCmd, PageParams params) {
+        return Optional.ofNullable(jobManager.getRecordsCache().getCached(fullCmd))
+            .map(cached -> MCPToolResult.fromCompletedPagedResult(cached, params.offset, params.limit).asCallToolResult())
+            .or(() -> Optional.of(MCPToolResult.fromError("Collection completed but no cached result found").asCallToolResult()));
+    }
+    
+    private void waitForSufficientRecords(MCPToolFcliRecordsCache.InProgressEntry inProgress, PageParams params) 
+            throws InterruptedException {
+        var records = inProgress.getRecords();
+        var requiredCount = params.offset + params.limit + 1;
+        
+        while (records.size() < requiredCount && !inProgress.isCompleted()) {
+            Thread.sleep(50);
+        }
+    }
+    
+    private Optional<CallToolResult> checkForCompletedWithError(
+            MCPToolFcliRecordsCache.InProgressEntry inProgress, String fullCmd) {
+        if (inProgress.isCompleted() && inProgress.getExitCode() != 0) {
+            log.warn("Background collection failed cmd='{}' exitCode={} stderr='{}'", 
+                fullCmd, inProgress.getExitCode(), inProgress.getStderr());
+            var errorResult = MCPToolResult.builder()
+                .exitCode(inProgress.getExitCode())
+                .stderr(inProgress.getStderr())
+                .records(List.of())
+                .build();
+            return Optional.of(errorResult.asCallToolResult());
+        }
+        return Optional.empty();
+    }
+    
+    private Optional<CallToolResult> checkForCompletedSuccessfully(
+            MCPToolFcliRecordsCache.InProgressEntry inProgress, String fullCmd, PageParams params) {
+        if (!inProgress.isCompleted()) {
+            return Optional.empty();
+        }
+        
+        return Optional.ofNullable(jobManager.getRecordsCache().getCached(fullCmd))
+            .map(cached -> {
+                log.debug("Returning COMPLETE paged result cmd='{}' offset={} limit={} loaded={} total={}",
+                    fullCmd, params.offset, params.limit, inProgress.getRecords().size(), cached.getRecords().size());
+                return MCPToolResult.fromCompletedPagedResult(cached, params.offset, params.limit).asCallToolResult();
+            })
+            .or(() -> {
+                log.warn("Background collection completed without cache entry cmd='{}'", fullCmd);
+                return Optional.empty();
+            });
+    }
+    
+    private Optional<CallToolResult> buildPartialPageResult(
+            MCPToolFcliRecordsCache.InProgressEntry inProgress, String fullCmd, PageParams params) {
+        var requiredCount = params.offset + params.limit + 1;
+        log.debug("Returning PARTIAL paged result cmd='{}' offset={} limit={} loaded={} need>={} jobToken={}",
+            fullCmd, params.offset, params.limit, inProgress.getRecords().size(), requiredCount, inProgress.getJobToken());
+        
+        var result = MCPToolResult.fromPartialPagedResult(
+            inProgress.getRecords(), 
+            params.offset, 
+            params.limit, 
+            false, 
+            inProgress.getJobToken()
+        );
+        return Optional.of(result.asCallToolResult());
     }
     
     private static final int toolArgAsInt(CallToolRequest request, String argName, int defaultValue) {
@@ -105,5 +170,22 @@ public final class MCPToolFcliRunnerRecordsPaged extends AbstractMCPToolFcliRunn
 
     private static Object toolArg(CallToolRequest request, String argName) {
         return request==null || request.arguments()==null ? null : request.arguments().get(argName);
+    }
+    
+    /**
+     * Immutable parameter object encapsulating pagination request parameters.
+     * Using a record provides:
+     * - Immutability by default
+     * - Clear grouping of related parameters
+     * - Automatic equals/hashCode/toString
+     * - Reduced parameter passing (1 object vs 3 primitives)
+     */
+    private record PageParams(boolean refresh, int offset, int limit) {
+        static PageParams from(CallToolRequest request) {
+            var refresh = toolArgAsBoolean(request, MCPToolArgHandlerPaging.ARG_REFRESH, false);
+            var offset = toolArgAsInt(request, MCPToolArgHandlerPaging.ARG_OFFSET, 0);
+            var limit = 20; // Fixed for now
+            return new PageParams(refresh, offset, limit);
+        }
     }
 }

@@ -19,7 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.util.LRUMap;
@@ -52,76 +52,101 @@ public class MCPToolFcliRecordsCache {
     }
 
     /**
-     * Synchronously collect records (legacy path) or return cached value.
-     * Prefer {@link #getOrStartBackground(String, boolean, CommandSpec)} for
-     * paged scenarios.
-     */
-    public final MCPToolResultRecords getOrCollect(String fullCmd, boolean refresh, CommandSpec spec) {
-        synchronized(cache) {
-            var cacheEntry = cache.get(fullCmd);
-            var result = ( cacheEntry==null || cacheEntry.isExpired() || refresh ) ? null : cacheEntry.getFullResult();
-            if ( result==null ) {
-                result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, spec);
-                if ( result.getExitCode()==0 ) { cache.put(fullCmd, new CacheEntry(result)); }
-            }
-            return result;
-        }
-    }
-
-    /**
      * Return cached full result if present and valid (respecting refresh). Otherwise
      * start (or reuse) an asynchronous background collection and return the in-progress
      * entry for partial access.
      */
     public final InProgressEntry getOrStartBackground(String fullCmd, boolean refresh, CommandSpec spec) {
-        // First check cache
         var cached = getCached(fullCmd);
-        if ( !refresh && cached!=null ) { return null; }
-        // Existing in-progress?
+        if (!refresh && cached != null) {
+            return null;
+        }
+        
         var existing = inProgress.get(fullCmd);
-        if ( existing!=null && !existing.isExpired() ) { return existing; }
-        // Create new in-progress entry
-        var newEntry = new InProgressEntry(fullCmd);
-        inProgress.put(fullCmd, newEntry);
-        CompletableFuture<MCPToolResultRecords> future = CompletableFuture.supplyAsync(() -> {
-            var records = newEntry.getRecords();
-            var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, n->{
-                // Interrupt check for cancellation
-                if ( Thread.currentThread().isInterrupted() ) { return; }
-                records.add(n);
-            }, spec);
-            if ( Thread.currentThread().isInterrupted() ) { // Cancelled mid-way
-                return null; // Don't cache partial as final
-            }
-            var full = MCPToolResultRecords.from(result, records);
-            if ( result.getExitCode()==0 ) { put(fullCmd, full); }
-            return full;
-        }, backgroundExecutor).whenComplete((r,t)->{
-            newEntry.setCompleted(true);
-            newEntry.setExitCode(r==null?999:r.getExitCode());
-            newEntry.setStderr(r==null?"Cancelled" : r.getStderr());
-            // Remove if failed/cancelled so subsequent request can retry
-            if ( r==null || newEntry.getExitCode()!=0 ) { inProgress.remove(fullCmd); }
-        });
-        newEntry.setFuture(future);
-        // Always track job via job manager
-        var counter = new AtomicInteger(); // Placeholder if we later compute deltas
-        var token = jobManager.trackFuture("cache_loader", future, () -> {
-            counter.set(newEntry.getRecords().size());
-            return newEntry.getRecords().size();
-        });
-        newEntry.setJobToken(token);
-        return newEntry;
+        if (existing != null && !existing.isExpired()) {
+            return existing;
+        }
+        
+        return startNewBackgroundCollection(fullCmd, spec);
     }
     
-    public final void put(String fullCmd, MCPToolResultRecords records) {
-        if ( records==null ) { return; }
+    private InProgressEntry startNewBackgroundCollection(String fullCmd, CommandSpec spec) {
+        var entry = new InProgressEntry(fullCmd);
+        inProgress.put(fullCmd, entry);
+        
+        var future = buildCollectionFuture(entry, fullCmd, spec);
+        future.whenComplete(createCompletionHandler(entry, fullCmd));
+        
+        entry.setFuture(future);
+        entry.setJobToken(trackCollectionJob(entry, future));
+        
+        return entry;
+    }
+    
+    private CompletableFuture<MCPToolResult> buildCollectionFuture(
+            InProgressEntry entry, String fullCmd, CommandSpec spec) {
+        return CompletableFuture.supplyAsync(() -> {
+            var records = entry.getRecords();
+            var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, record -> {
+                if (!Thread.currentThread().isInterrupted()) {
+                    records.add(record);
+                }
+            }, spec);
+            
+            if (Thread.currentThread().isInterrupted()) {
+                return null;
+            }
+            
+            var fullResult = MCPToolResult.fromRecords(result, records);
+            if (result.getExitCode() == 0) {
+                put(fullCmd, fullResult);
+            }
+            return fullResult;
+        }, backgroundExecutor);
+    }
+    
+    private BiConsumer<MCPToolResult, Throwable> createCompletionHandler(
+            InProgressEntry entry, String fullCmd) {
+        return (result, throwable) -> {
+            entry.setCompleted(true);
+            captureExecutionResult(entry, result, throwable);
+            cleanupFailedCollection(entry, fullCmd);
+        };
+    }
+    
+    private void captureExecutionResult(InProgressEntry entry, MCPToolResult result, Throwable throwable) {
+        if (throwable != null) {
+            entry.setExitCode(999);
+            entry.setStderr(throwable.getMessage() != null ? throwable.getMessage() : "Background collection failed");
+        } else if (result != null) {
+            entry.setExitCode(result.getExitCode());
+            entry.setStderr(result.getStderr());
+        } else {
+            entry.setExitCode(999);
+            entry.setStderr("Cancelled");
+        }
+    }
+    
+    private void cleanupFailedCollection(InProgressEntry entry, String fullCmd) {
+        if (entry.getExitCode() != 0) {
+            inProgress.remove(fullCmd);
+        }
+    }
+    
+    private String trackCollectionJob(InProgressEntry entry, CompletableFuture<MCPToolResult> future) {
+        return jobManager.trackFuture("cache_loader", future, () -> entry.getRecords().size());
+    }
+    
+    public final void put(String fullCmd, MCPToolResult records) {
+        if ( records==null ) {
+            return;
+        }
         synchronized(cache) {
             cache.put(fullCmd, new CacheEntry(records));
         }
     }
     
-    public final MCPToolResultRecords getCached(String fullCmd) {
+    public final MCPToolResult getCached(String fullCmd) {
         synchronized(cache) {
             var entry = cache.get(fullCmd);
             return entry==null || entry.isExpired() ? null : entry.getFullResult();
@@ -131,13 +156,19 @@ public class MCPToolFcliRecordsCache {
     /** Cancel a background collection if running. */
     public final void cancel(String fullCmd) {
         var inProg = inProgress.get(fullCmd);
-        if ( inProg!=null ) { inProg.cancel(); }
+        if ( inProg!=null ) {
+            inProg.cancel();
+        }
     }
 
     /** Shutdown background executor gracefully. */
     public final void shutdown() {
         backgroundExecutor.shutdown();
-        try { backgroundExecutor.awaitTermination(2, TimeUnit.SECONDS); } catch ( InterruptedException e ) { Thread.currentThread().interrupt(); }
+        try {
+            backgroundExecutor.awaitTermination(2, TimeUnit.SECONDS);
+        } catch ( InterruptedException e ) {
+            Thread.currentThread().interrupt();
+        }
         backgroundExecutor.shutdownNow();
     }
 
@@ -147,25 +178,43 @@ public class MCPToolFcliRecordsCache {
         private final String cmd;
         private final long created = System.currentTimeMillis();
         private final CopyOnWriteArrayList<JsonNode> records = new CopyOnWriteArrayList<>();
-        private volatile CompletableFuture<MCPToolResultRecords> future;
+        private volatile CompletableFuture<MCPToolResult> future;
         private volatile boolean completed = false;
         private volatile int exitCode = 0; // Interim
         private volatile String stderr = ""; // Interim
         private volatile String jobToken; // Optional job token for tracking
-        InProgressEntry(String cmd) { this.cmd = cmd; }
-        boolean isExpired() { return System.currentTimeMillis() > created + TTL; }
-        void setFuture(CompletableFuture<MCPToolResultRecords> f) { this.future = f; }
-        void cancel() { if ( future!=null ) { future.cancel(true); } }
-        void setJobToken(String jt) { this.jobToken = jt; }
+        
+        InProgressEntry(String cmd) {
+            this.cmd = cmd;
+        }
+        
+        boolean isExpired() {
+            return System.currentTimeMillis() > created + TTL;
+        }
+        
+        void setFuture(CompletableFuture<MCPToolResult> f) {
+            this.future = f;
+        }
+        
+        void cancel() {
+            if ( future!=null ) {
+                future.cancel(true);
+            }
+        }
+        
+        void setJobToken(String jt) {
+            this.jobToken = jt;
+        }
     }
     
-    @Data @RequiredArgsConstructor
+    @Data
+    @RequiredArgsConstructor
     private static final class CacheEntry {
-        private final MCPToolResultRecords fullResult;
+        private final MCPToolResult fullResult;
         private final long created = System.currentTimeMillis();
         
         public final boolean isExpired() {
-            return System.currentTimeMillis() > created + TTL; 
+            return System.currentTimeMillis() > created + TTL;
         }
     }
 }

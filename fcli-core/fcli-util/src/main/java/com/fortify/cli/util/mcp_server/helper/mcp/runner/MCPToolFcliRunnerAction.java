@@ -46,13 +46,27 @@ public final class MCPToolFcliRunnerAction implements IMCPToolRunner {
 
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
-        var fullCmd = buildFullCmd(request);
-        var toolName = String.format("fcli_%s_action_%s", module.replace('-', '_'), action.getMetadata().getName().replace('-', '_'));
-        Callable<CallToolResult> work = () -> {
+        try {
+            var fullCmd = buildFullCmd(request);
+            var toolName = buildToolName();
+            var work = createActionWork(fullCmd);
+            return jobManager.execute(exchange, toolName, work, MCPJobManager.ticking(new AtomicInteger()), true);
+        } catch (Exception e) {
+            return MCPToolResult.fromError(e).asCallToolResult();
+        }
+    }
+    
+    private Callable<CallToolResult> createActionWork(String fullCmd) {
+        return () -> {
             var result = MCPToolFcliRunnerHelper.collectStdout(fullCmd, getActionCommandSpec());
-            return MCPToolResultPlainText.from(result).asCallToolResult();
+            return MCPToolResult.fromPlainText(result).asCallToolResult();
         };
-        return jobManager.execute(exchange, toolName, work, MCPJobManager.ticking(new AtomicInteger()), true);
+    }
+    
+    private String buildToolName() {
+        return String.format("fcli_%s_action_%s", 
+            module.replace('-', '_'), 
+            action.getMetadata().getName().replace('-', '_'));
     }
     
     private String buildFullCmd(CallToolRequest request) {

@@ -28,10 +28,9 @@ import picocli.CommandLine.Model.CommandSpec;
 
 /**
  * {@link IMCPToolRunner} implementation that returns zero or more records as produced
- * by the fcli command being executed, in a structured JSON object as described by 
- * {@link MCPToolResultRecords}.
+ * by the fcli command being executed in a structured JSON object.
  * This is commonly used to run fcli commands that return either a single or small number of records.
- * See {@link MCPToolFcliRunnerRecordsPaged} for running fcli commands thta may return a large number
+ * See {@link MCPToolFcliRunnerRecordsPaged} for running fcli commands that may return a large number
  * of records.
  *
  * @author Ruud Senden
@@ -44,27 +43,22 @@ public final class MCPToolFcliRunnerRecords extends AbstractMCPToolFcliRunner {
         this.toolSpecArgHelper = toolSpecArgHelper;
         this.commandSpec = commandSpec;
     }
-    
-    @Override
-    protected CallToolResult execute(McpSyncServerExchange exchange, CallToolRequest request, String fullCmd) {
-        return MCPToolFcliRunnerHelper.collectRecords(fullCmd, getCommandSpec()).asCallToolResult();
-    }
 
     @Override
     public CallToolResult run(McpSyncServerExchange exchange, CallToolRequest request) {
-        final var fullCmd = (getCommandSpec().qualifiedName(" ") + (request!=null && request.arguments()!=null?" "+getToolSpecArgHelper().getFcliCmdArgs(request.arguments()):"")) .trim();
+        var fullCmd = getFullCmd(request);
         var toolName = getCommandSpec().qualifiedName("_").replace('-', '_');
         try {
             var records = new ArrayList<JsonNode>();
             var counter = new AtomicInteger();
             Callable<CallToolResult> callable = () -> {
                 var result = MCPToolFcliRunnerHelper.collectRecords(fullCmd, r->{ counter.incrementAndGet(); records.add(r); }, getCommandSpec());
-                return MCPToolResultRecords.from(result, records).asCallToolResult();
+                return MCPToolResult.fromRecords(result, records).asCallToolResult();
             };
             var progressStrategy = MCPJobManager.recordCounter(counter);
             return jobManager.execute(exchange, toolName, callable, progressStrategy, true);
         } catch ( Exception e ) {
-            return new CallToolResult(e.toString(), true);
+            return MCPToolResult.fromError(e).asCallToolResult();
         }
     }
 }

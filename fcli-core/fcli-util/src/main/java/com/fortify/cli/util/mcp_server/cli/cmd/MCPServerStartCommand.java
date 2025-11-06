@@ -68,7 +68,7 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
     @Option(names={"--work-threads"}, defaultValue="10") private int workThreads;
     @Option(names={"--progress-threads"}, defaultValue="4") private int progressThreads;
     @Option(names={"--job-safe-return"}, defaultValue="25s") private String jobSafeReturnPeriod;
-    @Option(names={"--progress-interval"}, defaultValue="500ms") private String progressIntervalPeriod;
+    @Option(names={"--progress-interval"}, defaultValue="5s") private String progressIntervalPeriod;
     private static final DateTimePeriodHelper PERIOD_HELPER = DateTimePeriodHelper.byRange(Period.MILLISECONDS, Period.MINUTES);
     private MCPJobManager jobManager;
 
@@ -150,7 +150,7 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
         public SyncToolSpecification createToolSpec() {
             return McpServerFeatures.SyncToolSpecification.builder().tool(createTool()).callHandler(createRunner()::run).build();
         }
-    private Tool createTool() { return Tool.builder().name(commandSpec.qualifiedName("_").replace('-', '_')).description(buildToolDescription()).inputSchema(toolSpecArgHelper.getSchema()).build(); }
+        private Tool createTool() { return Tool.builder().name(commandSpec.qualifiedName("_").replace('-', '_')).description(buildToolDescription()).inputSchema(toolSpecArgHelper.getSchema()).build(); }
         private String buildToolDescription() {
             var cmdHeader = commandSpec.commandLine().getHelp().header();
             var mcpToolDescription = FcliCommandSpecHelper.getMessageString(commandSpec, "mcp.description");
@@ -164,7 +164,9 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
         }
         private IMCPToolRunner createRunner() {
             if ( FcliCommandSpecHelper.canCollectRecords(commandSpec) ) {
-                if ( toolSpecArgHelper.isPaged() ) { return new MCPToolFcliRunnerRecordsPaged(toolSpecArgHelper, commandSpec, jobManager); }
+                if ( toolSpecArgHelper.isPaged() ) { 
+                    return new MCPToolFcliRunnerRecordsPaged(toolSpecArgHelper, commandSpec, jobManager); 
+                }
                 return new MCPToolFcliRunnerRecords(toolSpecArgHelper, commandSpec, jobManager);
             }
             return new MCPToolFcliRunnerPlainText(toolSpecArgHelper, commandSpec, jobManager);

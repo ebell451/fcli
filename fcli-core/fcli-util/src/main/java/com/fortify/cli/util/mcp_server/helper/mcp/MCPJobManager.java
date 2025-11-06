@@ -74,70 +74,116 @@ public class MCPJobManager {
                 moduleName, workThreads, progressThreads, safeReturnMillis, progressIntervalMillis);
     }
 
-    public MCPToolFcliRecordsCache getRecordsCache() { return recordsCache; }
+    public MCPToolFcliRecordsCache getRecordsCache() {
+        return recordsCache;
+    }
 
     // Public API for runners
     public CallToolResult execute(McpSyncServerExchange exchange, String toolName, Callable<CallToolResult> work, ProgressStrategy progressStrategy, boolean sendNotifications) {
+        JobExecution exec = createAndQueueJob(toolName, progressStrategy);
+        if ( sendNotifications ) {
+            sendProgressNotification(exchange, exec, false);
+        }
+        
+        CompletableFuture<CallToolResult> future = startJobExecution(exchange, exec, work, sendNotifications);
+        scheduleProgressUpdates(exchange, exec, progressStrategy, sendNotifications);
+        
+        return waitForCompletionOrReturnInProgress(exec, future);
+    }
+    
+    private JobExecution createAndQueueJob(String toolName, ProgressStrategy progressStrategy) {
         String token = UUID.randomUUID().toString();
         JobExecution exec = new JobExecution(token, toolName, progressStrategy);
         jobs.put(token, exec);
         log.info("Queued job {} for tool {}", token, toolName);
-        if ( sendNotifications ) { sendProgressNotification(exchange, exec, false); }
-        CompletableFuture<CallToolResult> future = CompletableFuture.supplyAsync(() -> {
-            exec.status = JobStatus.RUNNING;
-            exec.startTime = Instant.now();
-            if ( sendNotifications ) { sendProgressNotification(exchange, exec, false); }
-            log.info("Started job {} for tool {}", token, toolName);
-            try {
-                return work.call();
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                exec.status = JobStatus.CANCELLED;
-                return buildMessageResult("cancelled", token, toolName, "Interrupted");
-            } catch (Exception e) {
-                exec.status = JobStatus.FAILED;
-                return buildErrorResult(token, toolName, e.getMessage());
-            }
-        }, workExecutor).whenComplete((res, t) -> {
-            if ( t != null ) {
-                exec.status = JobStatus.FAILED;
-                exec.result = buildErrorResult(token, toolName, t.getMessage());
-            } else {
-                exec.status = exec.status==JobStatus.CANCELLED?exec.status:JobStatus.COMPLETED;
-                exec.result = res;
-            }
-            exec.endTime = Instant.now();
-            if ( sendNotifications ) { sendProgressNotification(exchange, exec, true); }
-            log.info("Finished job {} for tool {} with status {}", token, toolName, exec.status);
-        });
+        return exec;
+    }
+    
+    private CompletableFuture<CallToolResult> startJobExecution(McpSyncServerExchange exchange, JobExecution exec, Callable<CallToolResult> work, boolean sendNotifications) {
+        CompletableFuture<CallToolResult> future = CompletableFuture.supplyAsync(() -> executeWork(exchange, exec, work, sendNotifications), workExecutor)
+            .whenComplete((res, t) -> handleJobCompletion(exchange, exec, res, t, sendNotifications));
         exec.future = future;
-        // Schedule periodic progress updates (only while running)
+        return future;
+    }
+    
+    private CallToolResult executeWork(McpSyncServerExchange exchange, JobExecution exec, Callable<CallToolResult> work, boolean sendNotifications) {
+        exec.status = JobStatus.RUNNING;
+        exec.startTime = Instant.now();
         if ( sendNotifications ) {
-            exec.progressTask = progressExecutor.scheduleAtFixedRate(() -> {
-                try { exec.progress.set(progressStrategy.updateAndGetProgress()); }
-                catch (Exception e) { log.trace("Progress strategy error: {}", e.toString()); }
-                if ( exec.status==JobStatus.RUNNING ) {
-                    log.debug("Periodic progress tick for job {} progress={}", exec.token, exec.progress.get());
-                    sendProgressNotification(exchange, exec, false);
-                }
-            }, progressIntervalMillis, progressIntervalMillis, TimeUnit.MILLISECONDS);
+            sendProgressNotification(exchange, exec, false);
         }
-
+        log.info("Started job {} for tool {}", exec.token, exec.toolName);
+        
+        try {
+            return work.call();
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            exec.status = JobStatus.CANCELLED;
+            return buildMessageResult("cancelled", exec.token, exec.toolName, "Interrupted");
+        } catch (Exception e) {
+            exec.status = JobStatus.FAILED;
+            return buildErrorResult(exec.token, exec.toolName, e.getMessage());
+        }
+    }
+    
+    private void handleJobCompletion(McpSyncServerExchange exchange, JobExecution exec, CallToolResult res, Throwable t, boolean sendNotifications) {
+        if ( t != null ) {
+            exec.status = JobStatus.FAILED;
+            exec.result = buildErrorResult(exec.token, exec.toolName, t.getMessage());
+        } else {
+            exec.status = exec.status==JobStatus.CANCELLED?exec.status:JobStatus.COMPLETED;
+            exec.result = res;
+        }
+        exec.endTime = Instant.now();
+        if ( sendNotifications ) {
+            sendProgressNotification(exchange, exec, true);
+        }
+        log.info("Finished job {} for tool {} with status {}", exec.token, exec.toolName, exec.status);
+    }
+    
+    private void scheduleProgressUpdates(McpSyncServerExchange exchange, JobExecution exec, ProgressStrategy progressStrategy, boolean sendNotifications) {
+        if ( !sendNotifications ) {
+            return;
+        }
+        
+        exec.progressTask = progressExecutor.scheduleAtFixedRate(() -> {
+            updateProgress(exchange, exec, progressStrategy);
+        }, progressIntervalMillis, progressIntervalMillis, TimeUnit.MILLISECONDS);
+    }
+    
+    private void updateProgress(McpSyncServerExchange exchange, JobExecution exec, ProgressStrategy progressStrategy) {
+        try {
+            exec.progress.set(progressStrategy.updateAndGetProgress());
+        } catch (Exception e) {
+            log.trace("Progress strategy error: {}", e.toString());
+        }
+        
+        if ( exec.status==JobStatus.RUNNING ) {
+            log.debug("Periodic progress tick for job {} progress={}", exec.token, exec.progress.get());
+            sendProgressNotification(exchange, exec, false);
+        }
+    }
+    
+    private CallToolResult waitForCompletionOrReturnInProgress(JobExecution exec, CompletableFuture<CallToolResult> future) {
         long start = System.currentTimeMillis();
         while ( System.currentTimeMillis()-start < safeReturnMillis ) {
             if ( future.isDone() ) {
                 exec.cleanup();
-                jobs.remove(token);
-                return exec.result!=null?exec.result:buildErrorResult(token, toolName, "No result");
+                jobs.remove(exec.token);
+                return exec.result!=null?exec.result:buildErrorResult(exec.token, exec.toolName, "No result");
             }
             sleep(100);
         }
-        // Timed out -> return in-progress placeholder
-        exec.status = JobStatus.RUNNING; // still running
+        
+        return buildInProgressResult(exec);
+    }
+    
+    private CallToolResult buildInProgressResult(JobExecution exec) {
+        exec.status = JobStatus.RUNNING;
         ObjectNode n = mapper.createObjectNode();
         n.put("status", "in_progress");
-        n.put("job_token", token);
-        n.put("tool", toolName);
+        n.put("job_token", exec.token);
+        n.put("tool", exec.toolName);
         n.put("progress", exec.progress.get());
         n.put("message", "Operation still running; call fcli_"+moduleName+"_mcp_job for status|wait|cancel");
         return new CallToolResult(n.toPrettyString(), false);
@@ -152,36 +198,58 @@ public class MCPJobManager {
      * Returns job token immediately; does not wait for safeReturnMillis.
      */
     public String trackFuture(String toolName, CompletableFuture<?> future, ProgressStrategy progressStrategy) {
+        JobExecution exec = createRunningJob(toolName, progressStrategy);
+        scheduleProgressSampling(exec, progressStrategy);
+        attachFutureCompletionHandler(exec, future);
+        return exec.token;
+    }
+    
+    private JobExecution createRunningJob(String toolName, ProgressStrategy progressStrategy) {
         String token = UUID.randomUUID().toString();
         JobExecution exec = new JobExecution(token, toolName, progressStrategy);
         jobs.put(token, exec);
         exec.status = JobStatus.RUNNING;
         exec.startTime = Instant.now();
         log.info("Tracking external future as job {} tool {}", token, toolName);
-        // Schedule progress sampling
+        return exec;
+    }
+    
+    private void scheduleProgressSampling(JobExecution exec, ProgressStrategy progressStrategy) {
         exec.progressTask = progressExecutor.scheduleAtFixedRate(() -> {
-            try { exec.progress.set(progressStrategy.updateAndGetProgress()); }
-            catch ( Exception e ) { log.trace("Progress strategy error: {}", e.toString()); }
-        }, progressIntervalMillis, progressIntervalMillis, TimeUnit.MILLISECONDS);
-        // When future completes, finalize job
-        future.whenComplete((res, t) -> {
-            if ( t != null ) {
-                exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.FAILED;
-                exec.result = buildErrorResult(token, toolName, t.getMessage());
-            } else {
-                exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.COMPLETED;
-                ObjectNode n = mapper.createObjectNode();
-                n.put("status", exec.status.name().toLowerCase());
-                n.put("job_token", token);
-                n.put("tool", toolName);
-                n.put("message", exec.status==JobStatus.COMPLETED?"background collection completed":"background collection ended");
-                exec.result = new CallToolResult(n.toPrettyString(), false);
+            try {
+                exec.progress.set(progressStrategy.updateAndGetProgress());
+            } catch ( Exception e ) {
+                log.trace("Progress strategy error: {}", e.toString());
             }
+        }, progressIntervalMillis, progressIntervalMillis, TimeUnit.MILLISECONDS);
+    }
+    
+    private void attachFutureCompletionHandler(JobExecution exec, CompletableFuture<?> future) {
+        future.whenComplete((res, t) -> {
+            finalizeFutureJob(exec, t);
             exec.endTime = Instant.now();
             exec.cleanup();
-            log.info("Tracked future finished job {} status {}", token, exec.status);
+            log.info("Tracked future finished job {} status {}", exec.token, exec.status);
         });
-        return token;
+    }
+    
+    private void finalizeFutureJob(JobExecution exec, Throwable t) {
+        if ( t != null ) {
+            exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.FAILED;
+            exec.result = buildErrorResult(exec.token, exec.toolName, t.getMessage());
+        } else {
+            exec.status = exec.cancelled.get()?JobStatus.CANCELLED:JobStatus.COMPLETED;
+            exec.result = buildFutureCompletionResult(exec);
+        }
+    }
+    
+    private CallToolResult buildFutureCompletionResult(JobExecution exec) {
+        ObjectNode n = mapper.createObjectNode();
+        n.put("status", exec.status.name().toLowerCase());
+        n.put("job_token", exec.token);
+        n.put("tool", exec.toolName);
+        n.put("message", exec.status==JobStatus.COMPLETED?"background collection completed":"background collection ended");
+        return new CallToolResult(n.toPrettyString(), false);
     }
 
     public SyncToolSpecification getJobToolSpecification() {
@@ -219,7 +287,9 @@ public class MCPJobManager {
     }
 
     private CallToolResult handleJobOperation(String token, String op) {
-        if ( token==null || op==null ) { return new CallToolResult("Missing job_token or operation", true); }
+        if ( token==null || op==null ) {
+            return new CallToolResult("Missing job_token or operation", true);
+        }
         JobExecution exec = jobs.get(token);
         try {
             return JobOperation.valueOf(op.toUpperCase()).apply(this, exec, token);
@@ -229,7 +299,9 @@ public class MCPJobManager {
     }
 
     private CallToolResult status(JobExecution exec, String token) {
-        if ( exec==null ) { return new CallToolResult(json(mapper.createObjectNode().put("job_token", token).put("status", "not_found")), false); }
+        if ( exec==null ) {
+            return new CallToolResult(json(mapper.createObjectNode().put("job_token", token).put("status", "not_found")), false);
+        }
         var n = mapper.createObjectNode();
         n.put("job_token", token);
         n.put("tool", exec.toolName);
@@ -247,34 +319,69 @@ public class MCPJobManager {
     }
 
     private CallToolResult wait(JobExecution exec, String token) {
-        if ( exec==null ) { return status(null, token); }
+        if ( exec==null ) {
+            return status(null, token);
+        }
         long start = System.currentTimeMillis();
         while ( System.currentTimeMillis()-start < safeReturnMillis ) {
-            if ( exec.future!=null && exec.future.isDone() ) { break; }
+            if ( exec.future!=null && exec.future.isDone() ) {
+                break;
+            }
             sleep(150);
         }
-        if ( exec.future!=null && exec.future.isDone() ) { exec.cleanup(); jobs.remove(token); }
+        if ( exec.future!=null && exec.future.isDone() ) {
+            exec.cleanup();
+            jobs.remove(token);
+        }
         return status(exec, token);
     }
 
     private CallToolResult cancel(JobExecution exec, String token) {
-        if ( exec==null ) { return status(null, token); }
+        if ( exec==null ) {
+            return status(null, token);
+        }
         exec.cancelled.set(true);
-        if ( exec.future!=null ) { exec.future.cancel(true); }
+        if ( exec.future!=null ) {
+            exec.future.cancel(true);
+        }
         exec.status = JobStatus.CANCELLED;
         exec.endTime = Instant.now();
         sendProgressNotification(null, exec, true);
         return status(exec, token);
     }
 
-    private static void sleep(long ms) { try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } }
-    private static String json(ObjectNode n) { return n.toPrettyString(); }
-    private static String stringArg(Map<String,Object> args, String name) { if ( args==null ) { return null; } var o=args.get(name); return o==null?null:o.toString(); }
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+    
+    private static String json(ObjectNode n) {
+        return n.toPrettyString();
+    }
+    
+    private static String stringArg(Map<String,Object> args, String name) {
+        if ( args==null ) {
+            return null;
+        }
+        var o=args.get(name);
+        return o==null?null:o.toString();
+    }
 
     // Progress strategy: either record counter or ticking progress
-    public interface ProgressStrategy { int updateAndGetProgress(); }
-    public static ProgressStrategy recordCounter(AtomicInteger counter) { return () -> counter.get(); }
-    public static ProgressStrategy ticking(AtomicInteger counter) { return () -> counter.incrementAndGet(); }
+    public interface ProgressStrategy {
+        int updateAndGetProgress();
+    }
+    
+    public static ProgressStrategy recordCounter(AtomicInteger counter) {
+        return () -> counter.get();
+    }
+    
+    public static ProgressStrategy ticking(AtomicInteger counter) {
+        return () -> counter.incrementAndGet();
+    }
 
     private enum JobStatus { QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED }
 
@@ -292,15 +399,30 @@ public class MCPJobManager {
         volatile CallToolResult result;
     volatile ScheduledFuture<?> progressTask;
         volatile Integer total; // Optional total count for progress
+        
         JobExecution(String token, String toolName, ProgressStrategy progressStrategy) {
-            this.token = token; this.toolName = toolName; this.progressStrategy = progressStrategy; }
-        void cleanup() { if ( progressTask!=null ) { progressTask.cancel(false); } }
+            this.token = token;
+            this.toolName = toolName;
+            this.progressStrategy = progressStrategy;
+        }
+        
+        void cleanup() {
+            if ( progressTask!=null ) {
+                progressTask.cancel(false);
+            }
+        }
+        
         long getQueueSeconds() {
-            if ( startTime==null ) { return Math.max(0, (Instant.now().getEpochSecond()-creationTime.getEpochSecond())); }
+            if ( startTime==null ) {
+                return Math.max(0, (Instant.now().getEpochSecond()-creationTime.getEpochSecond()));
+            }
             return Math.max(0, (startTime.getEpochSecond()-creationTime.getEpochSecond()));
         }
+        
         long getExecutionSeconds() {
-            if ( startTime==null ) { return 0; }
+            if ( startTime==null ) {
+                return 0;
+            }
             Instant effectiveEnd = endTime!=null?endTime:Instant.now();
             return Math.max(0, (effectiveEnd.getEpochSecond()-startTime.getEpochSecond()));
         }
@@ -308,17 +430,32 @@ public class MCPJobManager {
 
     private CallToolResult buildErrorResult(String token, String tool, String message) {
         ObjectNode n = mapper.createObjectNode();
-        n.put("status", "failed"); n.put("job_token", token); n.put("tool", tool); n.put("error", message==null?"Unknown":message);
+        n.put("status", "failed");
+        n.put("job_token", token);
+        n.put("tool", tool);
+        n.put("error", message==null?"Unknown":message);
         return new CallToolResult(n.toPrettyString(), true);
     }
+    
     private CallToolResult buildMessageResult(String status, String token, String tool, String msg) {
-        ObjectNode n = mapper.createObjectNode(); n.put("status", status); n.put("job_token", token); n.put("tool", tool); n.put("message", msg); return new CallToolResult(n.toPrettyString(), false); }
+        ObjectNode n = mapper.createObjectNode();
+        n.put("status", status);
+        n.put("job_token", token);
+        n.put("tool", tool);
+        n.put("message", msg);
+        return new CallToolResult(n.toPrettyString(), false);
+    }
 
     private void addFinalResult(ObjectNode target, CallToolResult result) {
         String content = null;
-        try { content = (String)result.getClass().getMethod("content").invoke(result); }
-        catch ( Exception e ) { content = result.toString(); }
-        if ( content==null ) { return; }
+        try {
+            content = (String)result.getClass().getMethod("content").invoke(result);
+        } catch ( Exception e ) {
+            content = result.toString();
+        }
+        if ( content==null ) {
+            return;
+        }
         // Try to parse as JSON, fall back to raw string
         try {
             var jsonNode = mapper.readTree(content);
@@ -331,12 +468,17 @@ public class MCPJobManager {
     }
 
     private boolean isError(CallToolResult result) {
-        try { return (Boolean)result.getClass().getMethod("isError").invoke(result); }
-        catch ( Exception e ) { return false; }
+        try {
+            return (Boolean)result.getClass().getMethod("isError").invoke(result);
+        } catch ( Exception e ) {
+            return false;
+        }
     }
 
     private void sendProgressNotification(McpSyncServerExchange exchange, JobExecution exec, boolean finalNotification) {
-        if ( exchange==null ) { return; }
+        if ( exchange==null ) {
+            return;
+        }
         try {
             if ( finalNotification && exec.status==JobStatus.COMPLETED && exec.total==null ) {
                 exec.total = exec.progress.get();
@@ -360,7 +502,9 @@ public class MCPJobManager {
         root.put("status", status);
         root.put("tool", exec.toolName);
         root.put("progress", progress);
-        if ( total!=null ) { root.put("total", total); }
+        if ( total!=null ) {
+            root.put("total", total);
+        }
         root.put("queue_seconds", queueSecs);
         root.put("execution_seconds", execSecs);
         root.put("final", finalNotification);
@@ -376,9 +520,25 @@ public class MCPJobManager {
     }
 
     private static enum JobOperation {
-        STATUS { @Override CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) { return mgr.status(exec, token); } },
-        WAIT { @Override CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) { return mgr.wait(exec, token); } },
-        CANCEL { @Override CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) { return mgr.cancel(exec, token); } };
+        STATUS {
+            @Override
+            CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) {
+                return mgr.status(exec, token);
+            }
+        },
+        WAIT {
+            @Override
+            CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) {
+                return mgr.wait(exec, token);
+            }
+        },
+        CANCEL {
+            @Override
+            CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token) {
+                return mgr.cancel(exec, token);
+            }
+        };
+        
         abstract CallToolResult apply(MCPJobManager mgr, JobExecution exec, String token);
     }
 }
