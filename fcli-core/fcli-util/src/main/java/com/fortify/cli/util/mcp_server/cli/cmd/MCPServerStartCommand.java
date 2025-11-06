@@ -76,8 +76,12 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
     public Integer call() throws Exception {
         long safeReturnMillis = PERIOD_HELPER.parsePeriodToMillis(jobSafeReturnPeriod);
         long progressIntervalMillis = PERIOD_HELPER.parsePeriodToMillis(progressIntervalPeriod);
-        if ( safeReturnMillis<=0 ) { safeReturnMillis = 25000; }
-        if ( progressIntervalMillis<=0 ) { progressIntervalMillis = 500; }
+        if ( safeReturnMillis<=0 ) {
+            safeReturnMillis = 25000;
+        }
+        if ( progressIntervalMillis<=0 ) {
+            progressIntervalMillis = 500;
+        }
         // Instantiate job manager prior to building tool specs so we can include job tool spec
         this.jobManager = new MCPJobManager(module.toString(), workThreads, progressThreads, safeReturnMillis, progressIntervalMillis);
         var toolSpecs = createToolSpecs();
@@ -97,7 +101,12 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
         Thread.getAllStackTraces().keySet().stream()
             .filter(t->!t.isDaemon() && t!=Thread.currentThread())
             .forEach(t-> {
-                try { t.join(); } catch (InterruptedException e) { log.warn("Interrupted while joining thread {}", t.getName(), e); Thread.currentThread().interrupt(); }
+                try {
+                    t.join();
+                } catch (InterruptedException e) {
+                    log.warn("Interrupted while joining thread {}", t.getName(), e);
+                    Thread.currentThread().interrupt();
+                }
             });
         return 0;
     }
@@ -117,7 +126,9 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
                 .map(this::createCommandToolSpec)
                 .peek(s->log.debug("Registering cmd tool: {}", s.tool().name()))
                 .toList());
-        if ( module.hasActionCmd() ) { result.addAll(createActionToolSpecs()); }
+        if ( module.hasActionCmd() ) {
+            result.addAll(createActionToolSpecs());
+        }
         // Job management tool
         result.add(jobManager.getJobToolSpecification());
         return result;
@@ -134,23 +145,37 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
     }
 
     private boolean includeActionAsMcpTool(Action action) {
-        try { return action.getConfig()==null || action.getConfig().getMcp()!=ActionMcpIncludeExclude.exclude; }
-        catch (Exception e) { log.warn("Error checking MCP include/exclude for action {}: {}", action!=null && action.getMetadata()!=null ? action.getMetadata().getName() : "<unknown>", e.toString()); return false; }
+        try {
+            return action.getConfig()==null || action.getConfig().getMcp()!=ActionMcpIncludeExclude.exclude;
+        } catch (Exception e) {
+            log.warn("Error checking MCP include/exclude for action {}: {}", action!=null && action.getMetadata()!=null ? action.getMetadata().getName() : "<unknown>", e.toString());
+            return false;
+        }
     }
 
-    private SyncToolSpecification createCommandToolSpec(CommandSpec spec) { 
-        return new CommandToolSpecHelper(spec).createToolSpec(); 
+    private SyncToolSpecification createCommandToolSpec(CommandSpec spec) {
+        return new CommandToolSpecHelper(spec).createToolSpec();
     }
 
     private final class CommandToolSpecHelper {
         private final CommandSpec commandSpec;
         private final MCPToolArgHandlers toolSpecArgHelper;
-        private CommandToolSpecHelper(CommandSpec commandSpec) { this.commandSpec = commandSpec; this.toolSpecArgHelper = new MCPToolArgHandlers(commandSpec); }
+        
+        private CommandToolSpecHelper(CommandSpec commandSpec) {
+            this.commandSpec = commandSpec;
+            this.toolSpecArgHelper = new MCPToolArgHandlers(commandSpec);
+        }
+        
         @SneakyThrows
         public SyncToolSpecification createToolSpec() {
             return McpServerFeatures.SyncToolSpecification.builder().tool(createTool()).callHandler(createRunner()::run).build();
         }
-        private Tool createTool() { return Tool.builder().name(commandSpec.qualifiedName("_").replace('-', '_')).description(buildToolDescription()).inputSchema(toolSpecArgHelper.getSchema()).build(); }
+        
+        private Tool createTool() {
+            return Tool.builder().name(commandSpec.qualifiedName("_")
+                .replace('-', '_')).description(buildToolDescription())
+                .inputSchema(toolSpecArgHelper.getSchema()).build();
+        }
         private String buildToolDescription() {
             var cmdHeader = commandSpec.commandLine().getHelp().header();
             var mcpToolDescription = FcliCommandSpecHelper.getMessageString(commandSpec, "mcp.description");
@@ -164,8 +189,8 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
         }
         private IMCPToolRunner createRunner() {
             if ( FcliCommandSpecHelper.canCollectRecords(commandSpec) ) {
-                if ( toolSpecArgHelper.isPaged() ) { 
-                    return new MCPToolFcliRunnerRecordsPaged(toolSpecArgHelper, commandSpec, jobManager); 
+                if ( toolSpecArgHelper.isPaged() ) {
+                    return new MCPToolFcliRunnerRecordsPaged(toolSpecArgHelper, commandSpec, jobManager);
                 }
                 return new MCPToolFcliRunnerRecords(toolSpecArgHelper, commandSpec, jobManager);
             }
@@ -174,33 +199,94 @@ public class MCPServerStartCommand extends AbstractRunnableCommand {
     }
 
     private final class ActionToolSpecHelper {
-        private final String moduleName; private final Action action; private final List<IMCPToolArgHandler> argHandlers;
-        private ActionToolSpecHelper(String module, Action action) { this.moduleName = module; this.action = action; this.argHandlers = createArgHandlers(); }
-        public SyncToolSpecification createToolSpec() { return McpServerFeatures.SyncToolSpecification.builder().tool(createTool()).callHandler(new MCPToolFcliRunnerAction(moduleName, action, argHandlers, jobManager)::run).build(); }
-        private Tool createTool() { return Tool.builder().name(getToolName()).description(getDescription()).inputSchema(createSchema()).build(); }
+        private final String moduleName;
+        private final Action action;
+        private final List<IMCPToolArgHandler> argHandlers;
+        
+        private ActionToolSpecHelper(String module, Action action) {
+            this.moduleName = module;
+            this.action = action;
+            this.argHandlers = createArgHandlers();
+        }
+        
+        public SyncToolSpecification createToolSpec() {
+            return McpServerFeatures.SyncToolSpecification.builder().tool(createTool()).callHandler(new MCPToolFcliRunnerAction(moduleName, action, argHandlers, jobManager)::run).build();
+        }
+        
+        private Tool createTool() {
+            return Tool.builder().name(getToolName()).description(getDescription()).inputSchema(createSchema()).build();
+        }
         private List<IMCPToolArgHandler> createArgHandlers() {
             var result = new ArrayList<IMCPToolArgHandler>();
             if ( action.getCliOptions()!=null ) {
                 for ( Map.Entry<String, ActionCliOption> e : action.getCliOptions().entrySet() ) {
                     var opt = e.getValue();
-                    if ( opt.getMcp()==ActionMcpIncludeExclude.exclude ) { continue; }
-                    var name = getLongestName(opt); if ( StringUtils.isBlank(name) ) { continue; }
+                    if ( opt.getMcp()==ActionMcpIncludeExclude.exclude ) {
+                        continue;
+                    }
+                    var name = getLongestName(opt);
+                    if ( StringUtils.isBlank(name) ) {
+                        continue;
+                    }
                     result.add(new MCPToolArgHandlerActionOption(name, opt.getDescription(), opt.isRequired(), opt.getType()));
                 }
             }
             return result;
         }
-        private JsonSchema createSchema() { var schema = new JsonSchema("object", new LinkedHashMap<String,Object>(), new ArrayList<String>(), false, new LinkedHashMap<String,Object>(), new LinkedHashMap<String,Object>()); argHandlers.forEach(h->h.updateSchema(schema)); return schema; }
-        private String getToolName() { return "fcli_"+moduleName.replace('-', '_')+"_action_"+action.getMetadata().getName().replace('-', '_'); }
-        private String getDescription() { var usage = action.getUsage(); return usage!=null ? usage.getHeader() : action.getMetadata().getName(); }
-        private String getLongestName(ActionCliOption opt) { var names = opt.getNamesAsArray(); if ( names==null || names.length==0 ) { return null; } String longest=null; for ( var n : names ) { if ( longest==null || n.length()>longest.length() ) { longest=n; } } return longest; }
+        
+        private JsonSchema createSchema() {
+            var schema = new JsonSchema("object", new LinkedHashMap<String,Object>(), new ArrayList<String>(), false, new LinkedHashMap<String,Object>(), new LinkedHashMap<String,Object>());
+            argHandlers.forEach(h->h.updateSchema(schema));
+            return schema;
+        }
+        
+        private String getToolName() {
+            return "fcli_"+moduleName.replace('-', '_')+"_action_"+action.getMetadata().getName().replace('-', '_');
+        }
+        
+        private String getDescription() {
+            var usage = action.getUsage();
+            return usage!=null ? usage.getHeader() : action.getMetadata().getName();
+        }
+        
+        private String getLongestName(ActionCliOption opt) {
+            var names = opt.getNamesAsArray();
+            if ( names==null || names.length==0 ) {
+                return null;
+            }
+            String longest=null;
+            for ( var n : names ) {
+                if ( longest==null || n.length()>longest.length() ) {
+                    longest=n;
+                }
+            }
+            return longest;
+        }
     }
 
     public static enum McpModule {
         fod, ssc, sc_sast, sc_dast, aviator;
-        @Override public String toString() { return name().replace('_', '-'); }
-        public boolean hasActionCmd() { return getModuleSpec().subcommands().containsKey("action"); }
-        public Stream<CommandSpec> getSubcommandsStream() { return FcliCommandSpecHelper.commandTreeStream(getModuleSpec()); }
-        private CommandSpec getModuleSpec() { var moduleName = this.toString(); var moduleSpec = FcliCommandSpecHelper.getCommandSpec(moduleName); if ( moduleSpec==null ) { throw new FcliBugException("No command spec found for module: "+moduleName); } return moduleSpec; }
+        
+        @Override
+        public String toString() {
+            return name().replace('_', '-');
+        }
+        
+        public boolean hasActionCmd() {
+            return getModuleSpec().subcommands().containsKey("action");
+        }
+        
+        public Stream<CommandSpec> getSubcommandsStream() {
+            return FcliCommandSpecHelper.commandTreeStream(getModuleSpec());
+        }
+        
+        private CommandSpec getModuleSpec() {
+            var moduleName = this.toString();
+            var moduleSpec = FcliCommandSpecHelper.getCommandSpec(moduleName);
+            if ( moduleSpec==null ) {
+                throw new FcliBugException("No command spec found for module: "+moduleName);
+            }
+            return moduleSpec;
+        }
     }
 }
