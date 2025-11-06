@@ -85,6 +85,7 @@ public class DateTimePeriodHelper {
 
     public long parsePeriodToEpochMillis(String periodString){
         if(periodString == null || periodString.isBlank()) return 0;
+        periodString = trimPeriodString(periodString);
         Matcher matcher = periodPattern.matcher(periodString);
         Instant instant=Instant.EPOCH;
         int lastEnd = 0;
@@ -102,6 +103,23 @@ public class DateTimePeriodHelper {
             throw new IllegalArgumentException("Invalid trailing characters in period: '"+periodString.substring(lastEnd)+"' in '"+periodString+"'");
         }
         return instant.toEpochMilli();
+    }
+
+    /**
+     * Trim whitespace and strip surrounding quotes from period string for backward compatibility.
+     * The old implementation used {@code Matcher.find()} which would locate period patterns anywhere
+     * in the string, ignoring surrounding characters. This method preserves that lenient behavior
+     * while allowing stricter validation of the actual period content.
+     */
+    private static String trimPeriodString(String periodString) {
+        periodString = periodString.trim();
+        if ( (periodString.startsWith("'") && periodString.endsWith("'")) ||
+             (periodString.startsWith("\"") && periodString.endsWith("\"")) ) {
+            if ( periodString.length() >= 2 ) {
+                periodString = periodString.substring(1, periodString.length()-1);
+            }
+        }
+        return periodString;
     }
 
     private static long toMillis(int amount, Period period) {
