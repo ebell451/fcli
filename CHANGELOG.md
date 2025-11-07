@@ -6,7 +6,7 @@
 ### Features
 
 * `fcli license ncd-report`: Add support for Azure DevOps (see [#299](https://github.com/fortify/fcli/issues/299)) ([bb0b9b9](https://github.com/fortify/fcli/commit/bb0b9b934522129a72e4f29f6f255788f11c90bd))
-* `fcli ssc appversion create`: If there's only a single issue template makred as 'in use', this template will now be considered as the default template if no default template is explicitly configured in SSC ([1a865d7](https://github.com/fortify/fcli/commit/1a865d77183e598b4105ceaec54a4b44fc1fa1e1))
+* `fcli ssc appversion create`: If there's only a single issue template marked as 'in use', this template will now be considered as the default template if no default template is explicitly configured in SSC ([1a865d7](https://github.com/fortify/fcli/commit/1a865d77183e598b4105ceaec54a4b44fc1fa1e1))
 * Add `bulkaudit` SSC action for automated SAST Aviator batch auditing of SSC application versions ([2b9391d](https://github.com/fortify/fcli/commit/2b9391d6d69fc744c01716eeb924be5fe0cd0da7))
 * FoD `ci` action: Add support for new scan-agnostic `DO_WAIT` environment variable & deprecate `DO_SAST_WAIT` ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
 * SSC `ci` action: Add support for new scan-agnostic `DO_WAIT` environment variable & deprecate `DO_SAST_WAIT` ([b87ac3b](https://github.com/fortify/fcli/commit/b87ac3b4a5b365e6ed42f83c878d709026170dc5))
