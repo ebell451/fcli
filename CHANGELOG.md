@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.13.1](https://github.com/fortify/fcli/compare/v3.13.0...v3.13.1) (2025-11-07)
+
+
+### Bug Fixes
+
+* `fcli aviator * apply-remediations`: Fix `NullPointerException` if `--source-dir` not specified (fixes [#860](https://github.com/fortify/fcli/issues/860)) ([c5923d0](https://github.com/fortify/fcli/commit/c5923d0ad7e2c9755bcf686ddf1213be2e83ddea))
+* `fcli sc-dast scan`: Add support for new ScanCentral DAST scan status types ([f50777a](https://github.com/fortify/fcli/commit/f50777a755de75a6dd31cceca11e9623d0377881))
+* `fcli sc-dast scan`: Fix `ArrayIndexOutOfBoundsException` if ScanCentral DAST returns a scan status type that is not (yet) known to fcli, now returning `UnknownScanStatusType` instead ([f50777a](https://github.com/fortify/fcli/commit/f50777a755de75a6dd31cceca11e9623d0377881))
+* `fcli util mcp-server start`: Improve `fcli tool * run` commands to adhere to fcli stdout/stderr processing, to avoid tool output from interfering with MCP JSON-RPC messages (fixes [#859](https://github.com/fortify/fcli/issues/859)) ([2fa7817](https://github.com/fortify/fcli/commit/2fa7817cd4602f9e5a89cf6c72a30e5fa358e6b7))
+* `fcli util mcp-server start`: Improve support for long-running operations ([ff757af](https://github.com/fortify/fcli/commit/ff757afd597cef608d962320d8dbf1ec333b4e1e))
+* `fcli util mcp-server start`: Return paged records as soon as they become available ([4f59fde](https://github.com/fortify/fcli/commit/4f59fde9337ff3de50570e7d361e8c79f3f190c4))
+* SSC `bulkaudit` action: Exclude from MCP tools as it doesn't make sense to run a batch process through LLM ([de5472c](https://github.com/fortify/fcli/commit/de5472ca35823996bf8ba400069bfb447ac6dff9))
+* SSC `bulkaudit` action: Initialize `stats.audit_failures` counter to 0 to prevent error ([0a0a00a](https://github.com/fortify/fcli/commit/0a0a00ac3d1eda1597dbccd707ed478d7c09db1a))
+* SSC `debricked-scan` action: Exclude from MCP tools as this actions requires sensitive data to be entered ([16442a8](https://github.com/fortify/fcli/commit/16442a8d86c61326dc39b12070d3d4efbaf12958))
+
 ## [3.13.0](https://github.com/fortify/fcli/compare/v3.12.0...v3.13.0) (2025-10-31)
 
 
