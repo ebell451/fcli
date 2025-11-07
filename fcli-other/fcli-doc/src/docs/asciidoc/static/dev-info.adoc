@@ -116,10 +116,16 @@ The release process follows this high-level workflow:
 Before starting the release process, review the commit history on the `dev/v3.x` branch:
 
 ....
-git log rel/v3.x..dev/v3.x --oneline
+git log rel/v3.x..dev/v3.x
 ....
 
-Ensure all relevant features and fixes have proper conventional commit messages. If any commits are missing appropriate `feat:` or `fix:` messages, add them now using empty commits:
+This will display all commits with their full commit messages, which is important since a single commit may contain multiple conventional commit message entries (e.g., multiple `feat:` and `fix:` lines in one commit).
+
+Review the output and ensure all relevant features and fixes have proper conventional commit messages. Note that only commits with `feat:`, `fix:`, `feat!:`, or `fix!:` prefixes will appear in the changelog; commits with `chore:`, `ci:`, `docs:`, or other prefixes will not.
+
+TIP: To filter and view only the lines that will appear in the changelog, you can pipe the output through grep: `git log rel/v3.x..dev/v3.x | grep -E '^\s*(feat|fix)(\\(.*\\))?(!)?:'`
+
+If any commits are missing appropriate `feat:` or `fix:` messages, add them now using empty commits:
 
 ....
 git commit --allow-empty -m "feat: Description of feature"
@@ -156,7 +162,7 @@ This may take 15-30 minutes depending on GitHub runner availability.
 
 Once all workflows pass successfully:
 
-IMPORTANT: Use a **regular merge** (not squash or rebase) to merge the PR into `rel/v3.x`. This preserves the commit history needed for proper changelog generation.
+IMPORTANT: Use the **`Create a merge commit`** option (not `Squash and merge` or `Rebase and merge`) to merge the PR into `rel/v3.x`. This preserves the commit history needed for proper changelog generation.
 
 After merging, the `Build and release` workflow will run again on the `rel/v3.x` branch. Once completed, the `release-please` action will automatically create a new pull request containing:
 
@@ -175,14 +181,14 @@ NOTE: If you find issues with the release notes, it's generally better to fix th
 
 ==== Step 6: Merge the Release-Please PR
 
-IMPORTANT: Again, use a **regular merge** (not squash or rebase) to merge the release-please PR.
+IMPORTANT: Again, use the **`Create a merge commit`** option (not `Squash and merge` or `Rebase and merge`) to merge the release-please PR.
 
 Merging this PR will:
 
-. Immediately create a new GitHub release (without assets)
 . Trigger the `Build and release` workflow
+. Immediately create a new GitHub release (without assets)
 . Build all release artifacts (native binaries, jars, documentation)
-. Publish artifacts to the GitHub release (this takes 15-30 minutes)
+. Publish artifacts to the GitHub release (this usually takes 15-30 minutes)
 
 You can monitor the workflow progress at: https://github.com/fortify/fcli/actions
 
