@@ -62,12 +62,14 @@ public class AbstractActionSignCommand extends AbstractOutputCommand implements 
     
     @Override @SneakyThrows
     public JsonNode getJsonNode() {
-        var keyPairCreated = createKeyPair();
+        if ( !Files.exists(privateKeyPath) ) {
+            throw new FcliSimpleException("Private key file "+privateKeyPath+" doesn't exist. Please generate a private key using openssl or similar tool.");
+        }
         deleteExistingOutputFile();
         var metadata = createMetadata();
         var signer = SignatureHelper.textSigner(privateKeyPath, privateKeyPassword);
         signer.signAndWrite(actionFileToSign, signedActionFile, metadata);
-        writePublicKey(signer, !keyPairCreated);
+        writePublicKey(signer);
         
         return JsonHelper.getObjectMapper().createObjectNode()
                 .put("in", actionFileToSign.toString())
@@ -76,8 +78,8 @@ public class AbstractActionSignCommand extends AbstractOutputCommand implements 
                 .set("metadata", JsonHelper.getObjectMapper().valueToTree(metadata));
     }
 
-    private void writePublicKey(TextSigner signer, boolean doWritePublicKey) {
-        if ( doWritePublicKey && publicKeyPath!=null ) {
+    private void writePublicKey(TextSigner signer) {
+        if ( publicKeyPath!=null ) {
             if ( Files.exists(publicKeyPath) ) {
                 LOG.warn("WARN: Not writing public key as file already exists");
             } else {
@@ -121,19 +123,6 @@ public class AbstractActionSignCommand extends AbstractOutputCommand implements 
         if ( Files.exists(signedActionFile) ) {
             confirm.checkConfirmed(signedActionFile.toString());
             Files.deleteIfExists(signedActionFile);
-        }
-    }
-
-    private final boolean createKeyPair() {
-        if ( Files.exists(privateKeyPath) ) {
-            return false;
-        } else {
-            if ( publicKeyPath==null ) {
-                throw new FcliSimpleException("Private key file "+privateKeyPath+" doesn't exist, and not generating new key file as --pubOut hasn't been specified");
-            } else {
-                SignatureHelper.keyPairGenerator(privateKeyPassword).writePem(privateKeyPath, publicKeyPath);
-                return true;
-            }
         }
     }
 

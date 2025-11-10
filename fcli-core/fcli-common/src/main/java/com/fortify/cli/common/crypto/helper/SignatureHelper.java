@@ -20,7 +20,6 @@ import org.apache.commons.lang3.StringUtils;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.formkiq.graalvm.annotations.Reflectable;
-import com.fortify.cli.common.crypto.helper.impl.KPGenerator;
 import com.fortify.cli.common.crypto.helper.impl.PublicKeyTrustStore;
 import com.fortify.cli.common.crypto.helper.impl.SignedTextReader;
 import com.fortify.cli.common.crypto.helper.impl.Signer;
@@ -103,16 +102,6 @@ public class SignatureHelper {
     
     public static final SignedTextReader signedTextReader() {
         return SignedTextReader.INSTANCE;
-    }
-    
-    @SneakyThrows
-    public static final KPGenerator keyPairGenerator(char[] passPhrase) {
-        return new KPGenerator(passPhrase);
-    }
-    
-    @SneakyThrows
-    public static final KPGenerator keyPairGenerator(String passPhrase) {
-        return keyPairGenerator(StringUtils.isBlank(passPhrase) ? null : passPhrase.toCharArray());
     }
     
     public static final PublicKeyTrustStore publicKeyTrustStore() {
