@@ -17,6 +17,7 @@ import org.apache.commons.logging.LogFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fortify.cli.common.cli.mixin.CommonOptionMixins;
 import com.fortify.cli.common.output.transform.IActionCommandResultSupplier;
 import com.fortify.cli.fod._common.cli.mixin.FoDDelimiterMixin;
 import com.fortify.cli.fod._common.output.cli.cmd.AbstractFoDJsonNodeOutputCommand;
@@ -32,14 +33,13 @@ public abstract class AbstractFoDScanSetupCommand<T> extends AbstractFoDJsonNode
     private static final Log LOG = LogFactory.getLog(AbstractFoDScanSetupCommand.class);
     @Mixin protected FoDDelimiterMixin delimiterMixin; // Is automatically injected in resolver mixins
     @Mixin protected FoDReleaseByQualifiedNameOrIdResolverMixin.RequiredOption releaseResolver;
+    @Mixin protected CommonOptionMixins.SkipIfExistsOption skipIfExistsOption;
 
     @Option(names = {"--assessment-type"}, required = true)
     protected String assessmentType; // Plain text name as custom assessment types can be created
     @Mixin protected FoDEntitlementFrequencyTypeMixins.RequiredOption entitlementFrequencyTypeMixin;
     @Option(names = {"--entitlement-id"})
     protected Integer entitlementId;
-    @Option(names={"--skip-if-exists"})
-    protected Boolean skipIfExists = false;
 
     protected String assessmentTypeName;
 
@@ -68,7 +68,7 @@ public abstract class AbstractFoDScanSetupCommand<T> extends AbstractFoDJsonNode
         var releaseDescriptor = releaseResolver.getReleaseDescriptor(unirest);
         var releaseId = releaseDescriptor.getReleaseId();
         T setupDescriptor = getSetupDescriptor(unirest, releaseId);
-        var skippedNode = handleSkipIfExists(skipIfExists, setupDescriptor, releaseDescriptor);
+        var skippedNode = handleSkipIfExists(skipIfExistsOption.isSkipIfExists(), setupDescriptor, releaseDescriptor);
         if (skippedNode != null) {
             return skippedNode;
         } else {
